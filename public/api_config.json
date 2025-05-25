@@ -1,0 +1,24 @@
+{
+    "https://localhost:8443/#/home": {
+        "GET": {
+            "a": "1",
+            "b": "2"
+        },
+        "POST": {
+            "a": "3",
+            "b": "4"
+        }
+    },
+    "https://localhost:8443/#/home2": {
+        "GET": {
+            "a": "1",
+            "b": "2"
+        }
+    },
+    "https://localhost:8443/#/home3": {
+        "GET": {
+            "a": "1",
+            "b": "2"
+        }
+    }
+}
