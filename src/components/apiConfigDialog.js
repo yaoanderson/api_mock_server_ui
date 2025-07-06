@@ -10,7 +10,12 @@ import CloseIcon from '@material-ui/icons/Close';
 import Typography from '@material-ui/core/Typography';
 import Button from '@material-ui/core/Button';
 import Grid from '@material-ui/core/Grid';
+import Slider from '@material-ui/core/Slider';
+import Switch from '@material-ui/core/Switch';
+import FormControlLabel from '@material-ui/core/FormControlLabel';
 import axios from 'axios'
+import Radio from '@material-ui/core/Radio';
+import RadioGroup from '@material-ui/core/RadioGroup';
 
 const styles = (theme) => ({
     root: {
@@ -58,6 +63,8 @@ class ApiConfigDialog extends Component {
         this.state = {
             ApiConfigIsOpen: false,
             selectedApi: {},
+            api_config: '',
+            configMode: 'basic', // 新增
             ...props
         }
     }
@@ -66,7 +73,31 @@ class ApiConfigDialog extends Component {
         this.props.onRef(this)
     }
 
+    // 新增方法
+    handleConfigModeChange = (mode) => {
+        if (mode === 'basic') {
+            let jsonObj;
+            try {
+                jsonObj = JSON.parse(this.state.api_config);
+            } catch {
+                jsonObj = null;
+            }
+            if (jsonObj && jsonObj.b !== undefined) {
+                this.setState(prevState => ({
+                    configMode: mode,
+                    selectedApi: {
+                        ...prevState.selectedApi,
+                        b: jsonObj.b
+                    }
+                }));
+                return;
+            }
+        }
+        this.setState({ configMode: mode });
+    }
+
     render() {
+        const { configMode } = this.state;
         return (
             <Fragment>
                 <Dialog maxWidth='sm' fullWidth={true} style={{ zIndex: 100 }} onClose={() => this.closeProfile()} aria-labelledby="customized-dialog-title" open={this.state.ApiConfigIsOpen} >
@@ -77,26 +108,97 @@ class ApiConfigDialog extends Component {
                         <Grid
                             container
                             direction="column"
-                            justifyContent="center"
+                            justifyContent="flex-start"
                             alignItems="flex-start"
                             spacing={2}
                         >
-                            <Grid item >
+                            <Grid container alignItems="center" style={{ width: 560, marginBottom: 0 }} direction="row">
+                                <Grid item>
+                                    <FormControlLabel
+                                        control={<Radio checked={configMode === 'basic'} onChange={() => this.handleConfigModeChange('basic')} />}
+                                        label=""
+                                        style={{ marginRight: 8 }}
+                                    />
+                                </Grid>
+                                <Grid item>
+                                    <Typography variant="h6" gutterBottom style={{ color: '#333', textAlign: 'left', marginLeft: 0, marginBottom: 0 }}>
+                                        Basic Configuration
+                                    </Typography>
+                                </Grid>
+                            </Grid>
+                            <Grid item style={{ width: 560, border: '2px solid #e0e0e0', borderRadius: '8px', padding: '20px 10px 20px 10px', backgroundColor: '#fafafa', marginLeft: 10 }}>
+                                <Grid container direction="column" spacing={2} style={{ marginLeft: 0, width: '100%' }}>
+                                    <Grid item style={{ marginLeft: 0 }}>
+                                        <TextField
+                                            label="B Value"
+                                            value={this.state.selectedApi.b || ""}
+                                            placeholder="Enter B value"
+                                            variant="outlined"
+                                            fullWidth
+                                            onChange={(event) => this.setFieldValue("b", event.target.value)}
+                                            InputProps={{
+                                                readOnly: false,
+                                                disabled: configMode !== 'basic'
+                                            }}
+                                            style={{ marginLeft: 0 }}
+                                        />
+                                    </Grid>
+                                    <Grid item style={{ marginLeft: 0 }}>
+                                        <Typography id="speed-slider" gutterBottom style={{ textAlign: 'left', marginLeft: 0 }}>
+                                            Transmission Speed
+                                        </Typography>
+                                        <Slider
+                                            value={this.state.selectedApi.speed || 60}
+                                            onChange={(event, newValue) => this.setFieldValue("speed", newValue)}
+                                            aria-labelledby="speed-slider"
+                                            step={60}
+                                            marks={[
+                                                { value: 0, label: '0' },
+                                                { value: 20, label: '20' },
+                                                { value: 40, label: '40' },
+                                                { value: 60, label: '60' },
+                                                { value: 80, label: '80' },
+                                                { value: 100, label: '100' }
+                                            ]}
+                                            min={0}
+                                            max={100}
+                                            valueLabelDisplay="auto"
+                                            style={{ marginLeft: 0 }}
+                                            disabled={configMode !== 'basic'}
+                                        />
+                                    </Grid>
+                                </Grid>
+                            </Grid>
+                            <Grid container alignItems="center" style={{ width: 560, marginTop: 24, marginBottom: 0 }} direction="row">
+                                <Grid item>
+                                    <FormControlLabel
+                                        control={<Radio checked={configMode === 'advanced'} onChange={() => this.handleConfigModeChange('advanced')} />}
+                                        label=""
+                                        style={{ marginRight: 8 }}
+                                    />
+                                </Grid>
+                                <Grid item>
+                                    <Typography variant="h6" gutterBottom style={{ color: '#333', textAlign: 'left', marginLeft: 0, marginBottom: 0 }}>
+                                        Advanced Configuration
+                                    </Typography>
+                                </Grid>
+                            </Grid>
+                            <Grid item style={{ width: 560, marginLeft: 0 }}>
                                 <TextField
                                     multiline
-                                    defaultValue={JSON.stringify(this.state.selectedApi, null, 2)}
+                                    value={this.state.api_config}
                                     minRows={4}
                                     placeholder="Please input api config value"
                                     id="api-config"
                                     label="Json Config"
-                                    style={{ width: 560 }}
+                                    style={{ width: 560, marginLeft: 0 }}
                                     variant="outlined"
                                     onChange={(event) =>
                                         this.setFieldValue("api_config", event.target.value)
                                     }
                                     InputProps={{
                                         readOnly: false,
-                                        disabled: false
+                                        disabled: configMode !== 'advanced'
                                     }}
                                 />
                             </Grid>
@@ -114,11 +216,11 @@ class ApiConfigDialog extends Component {
 
     openConfig(item) {
         const api_method = item.split(" ");
-        console.log(this.props.apis);
         const filterApi = this.props.apis[api_method[0]][api_method[1]];
         this.setState({
             ApiConfigIsOpen: true,
-            selectedApi: filterApi
+            selectedApi: filterApi,
+            api_config: JSON.stringify(filterApi, null, 2)
         })
     }
 
@@ -153,11 +255,42 @@ class ApiConfigDialog extends Component {
     }
 
     setFieldValue(key, value) {
-        const selectedApi = this.state.selectedApi;
-        selectedApi[key] = value;
-        this.setState({
-            selectedApi: selectedApi
-        })
+        const selectedApi = { ...this.state.selectedApi };
+        if (key === 'b') {
+            // 更新b字段并同步到api_config
+            selectedApi.b = value;
+            let jsonObj;
+            try {
+                jsonObj = JSON.parse(this.state.api_config || JSON.stringify(selectedApi));
+            } catch {
+                jsonObj = { ...selectedApi };
+            }
+            jsonObj.b = value;
+            this.setState({
+                selectedApi,
+                api_config: JSON.stringify(jsonObj, null, 2)
+            });
+        } else if (key === 'api_config') {
+            // 更新api_config并同步b字段
+            let jsonObj;
+            try {
+                jsonObj = JSON.parse(value);
+            } catch {
+                jsonObj = null;
+            }
+            this.setState({
+                api_config: value,
+                selectedApi: {
+                    ...selectedApi,
+                    b: jsonObj && jsonObj.b !== undefined ? jsonObj.b : selectedApi.b
+                }
+            });
+        } else {
+            selectedApi[key] = value;
+            this.setState({
+                selectedApi
+            });
+        }
     }
 
     async submitProfile() {

@@ -327,43 +327,7 @@ class Home extends Component {
                             style={{ margin: 10, width: 980 }}
                         />
 
-                        <List id="filterApis" >
-                            <ListItem key={0} style={{ borderBottom: '1px solid #ccc', backgroundColor: '#d3d3d36b' }} >
-                                <ListItemText primary="API" style={{ overflow: 'auto', margin: 'auto 10px auto auto', color: 'rgba(0, 0, 0, 0.54)' }} />
-                                <ControlPointIcon onClick={() => this.addApi()} style={{padding: 6, position: 'absolute', left: 60, cursor: 'pointer', color: 'rgba(0, 0, 0, 0.54)' }} />
-                                <ListItemSecondaryAction style={{ height: 41, width: 500 }} >
-                                    <ListItemText primary="Mock" style={{ overflow: 'auto', margin: '8px 0px 8px 8px', paddingLeft: '35px', color: 'rgba(0, 0, 0, 0.54)', float: 'left' }} />
-                                    <Switch
-                                        color="primary"
-                                        edge="end"
-                                        onChange={(event) =>
-                                            this.setStatus(null, event.target.checked)
-                                        }
-                                        checked={this.state.api_all_enabled}
-                                        style={{ float: 'left' }} 
-                                    />
-                                    <SettingsIcon onClick={() => this.openConfig(null)} style={{padding: 6, position: 'relative', float: 'right', top: 1, cursor: 'pointer', height: '28px', color: 'rgba(0, 0, 0, 0.54)' }} />
-                                    <ListItemText primary="Batch Config" style={{ overflow: 'auto', margin: '8px 0px 8px 190px', paddingRight: '15px', color: 'rgba(0, 0, 0, 0.54)', float: 'right' }} />
-                                </ListItemSecondaryAction>
-                            </ListItem>
-                            { this.state.filterApis.map((item, index) => {
-                                return (
-                                    <ListItem key={item} style={{ borderBottom: '1px dotted #ccc' }} >
-                                        <ListItemText primary={item} style={{ overflow: 'auto', margin: 'auto 50px auto auto', width: '500px' }} />
-                                        <ListItemSecondaryAction style={{ width: 460 }}>
-                                            <Switch
-                                                color="primary"
-                                                edge="end"
-                                                onChange={(event) =>
-                                                    this.setStatus(index, event.target.checked)
-                                                }
-                                            />
-                                            <SettingsIcon onClick={() => this.openConfig(item)} style={{padding: 6, position: 'relative', float: 'right', marginLeft: 255, top: 1, height: '26px', cursor: 'pointer' }} />
-                                        </ListItemSecondaryAction>
-                                    </ListItem>
-                                )
-                            }) }
-                        </List>
+                        
 
                         <TableContainer>
                             <Table
@@ -425,7 +389,12 @@ class Home extends Component {
                                                 checked={this.state.apis[api][method].enabled}
                                             />
                                         </TableCell>
-                                        <TableCell align="center">{this.state.apis[api][method].b}</TableCell>
+                                        <TableCell align="center">
+                                            <SettingsIcon 
+                                                style={{ cursor: 'pointer', color: 'rgba(0, 0, 0, 0.54)' }} 
+                                                onClick={(e) => { e.stopPropagation(); this.openConfig(`${api} ${method}`); }} 
+                                            />
+                                        </TableCell>
                                     </TableRow>
                                     );
                                 })}
