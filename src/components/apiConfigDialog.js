@@ -148,10 +148,10 @@ class ApiConfigDialog extends Component {
                                             Transmission Speed
                                         </Typography>
                                         <Slider
-                                            value={this.state.selectedApi.speed || 60}
+                                            value={this.state.selectedApi.speed !== undefined ? Number(this.state.selectedApi.speed) : 60}
                                             onChange={(event, newValue) => this.setFieldValue("speed", newValue)}
                                             aria-labelledby="speed-slider"
-                                            step={60}
+                                            step={20}
                                             marks={[
                                                 { value: 0, label: '0' },
                                                 { value: 20, label: '20' },
@@ -270,6 +270,20 @@ class ApiConfigDialog extends Component {
                 selectedApi,
                 api_config: JSON.stringify(jsonObj, null, 2)
             });
+        } else if (key === 'speed') {
+            // 新增：同步speed字段到api_config
+            selectedApi.speed = Number(value);
+            let jsonObj;
+            try {
+                jsonObj = JSON.parse(this.state.api_config || JSON.stringify(selectedApi));
+            } catch {
+                jsonObj = { ...selectedApi };
+            }
+            jsonObj.speed = Number(value);
+            this.setState({
+                selectedApi,
+                api_config: JSON.stringify(jsonObj, null, 2)
+            });
         } else if (key === 'api_config') {
             // 更新api_config并同步b字段
             let jsonObj;
@@ -278,13 +292,21 @@ class ApiConfigDialog extends Component {
             } catch {
                 jsonObj = null;
             }
-            this.setState({
-                api_config: value,
-                selectedApi: {
-                    ...selectedApi,
-                    b: jsonObj && jsonObj.b !== undefined ? jsonObj.b : selectedApi.b
-                }
-            });
+            // 只有在 advanced 模式下才同步 selectedApi
+            if (this.state.configMode === 'advanced' && jsonObj) {
+                this.setState({
+                    api_config: value,
+                    selectedApi: {
+                        ...selectedApi,
+                        b: jsonObj.b !== undefined ? jsonObj.b : selectedApi.b,
+                        speed: jsonObj.speed !== undefined ? Number(jsonObj.speed) : selectedApi.speed
+                    }
+                });
+            } else {
+                this.setState({
+                    api_config: value
+                });
+            }
         } else {
             selectedApi[key] = value;
             this.setState({
@@ -339,6 +361,32 @@ class ApiConfigDialog extends Component {
                 });
             }
         })
+    }
+
+    async submitConfig() {
+        try {
+            const response = await fetch('https://127.0.0.1/update_api_config', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: this.state.api_config
+            });
+            if (response.ok) {
+                window.alert('submit success');
+                this.setState({
+                    ApiConfigIsOpen: false,
+                    selectedApi: {},
+                    api_config: '',
+                    currentApiMethod: undefined
+                });
+            } else {
+                const errText = await response.text();
+                window.alert('submit failed: ' + errText);
+            }
+        } catch (err) {
+            window.alert('submit failed: ' + err.message);
+        }
     }
 }
 

@@ -5,10 +5,6 @@ import axios from 'axios'
 
 import TextField from '@material-ui/core/TextField';
 import Autocomplete from '@material-ui/lab/Autocomplete';
-import List from '@material-ui/core/List';
-import ListItem from '@material-ui/core/ListItem';
-import ListItemSecondaryAction from '@material-ui/core/ListItemSecondaryAction';
-import ListItemText from '@material-ui/core/ListItemText';
 import Switch from '@material-ui/core/Switch';
 import AppBar from '@material-ui/core/AppBar';
 import Button from '@material-ui/core/Button';
@@ -17,12 +13,10 @@ import Tab from '@material-ui/core/Tab';
 import Typography from '@material-ui/core/Typography';
 import Box from '@material-ui/core/Box';
 import Paper from '@material-ui/core/Paper';
-import ControlPointIcon from '@material-ui/icons/ControlPoint';
 import SettingsIcon from '@material-ui/icons/Settings';
 import CircularProgress from '@material-ui/core/CircularProgress';
 import Backdrop from '@material-ui/core/Backdrop';
 import PropTypes from 'prop-types';
-import { alpha } from '@material-ui/core/styles';
 
 import Table from '@material-ui/core/Table';
 import TableBody from '@material-ui/core/TableBody';
@@ -32,13 +26,7 @@ import TableHead from '@material-ui/core/TableHead';
 import TablePagination from '@material-ui/core/TablePagination';
 import TableRow from '@material-ui/core/TableRow';
 import TableSortLabel from '@material-ui/core/TableSortLabel';
-import Toolbar from '@material-ui/core/Toolbar';
 import Checkbox from '@material-ui/core/Checkbox';
-import IconButton from '@material-ui/core/IconButton';
-import Tooltip from '@material-ui/core/Tooltip';
-import FormControlLabel from '@material-ui/core/FormControlLabel';
-import DeleteIcon from '@material-ui/icons/Delete';
-import FilterListIcon from '@material-ui/icons/FilterList';
 import { visuallyHidden } from '@material-ui/utils';
 
 import './home.css'
@@ -194,11 +182,14 @@ function descendingComparator(a, b, orderBy) {
     rowCount: PropTypes.number.isRequired,
   };
 
+
 class Home extends Component {
     constructor(props) {
         super(props);
+        // 优先从localStorage恢复token
+        const token = props.token || localStorage.getItem('token') || '';
         this.state = {
-            debug: props.debug,
+            debug: true,
             redirect: props.isLogin ? false : true,
             progress: 0,
             progressIsDisplay: 'none',
@@ -208,13 +199,15 @@ class Home extends Component {
             filterApis: [],
             tab: 0,
             api_all_enabled: false,
-            token: props.token,
+            token,
             refresh_token: props.refresh_token,
             order: 'asc',
             orderBy: 'api',
             selected: [],
             page: 0,
-            rowsPerPage: 5
+            rowsPerPage: 5,
+            apisLoading: true,
+            error: null
         }
     }
 
@@ -228,9 +221,14 @@ class Home extends Component {
     
       handleSelectAllClick = (event) => {
         if (event.target.checked) {
-          this.setState({ selected: this.state.rows.map((row) => row.id) });
+          const selected = this.state.filterApis.map((row) => row);
+          this.setState({ selected }, () => {
+            localStorage.setItem('selected', JSON.stringify(this.state.selected));
+          });
         } else {
-          this.setState({ selected: [] });
+          this.setState({ selected: [] }, () => {
+            localStorage.setItem('selected', '[]');
+          });
         }
       };
     
@@ -260,6 +258,19 @@ class Home extends Component {
       };
 
     componentDidMount() {
+        // 页面刷新时清理 filterApis
+        localStorage.removeItem('filterApis');
+        // 恢复 filterApis
+        const savedFilterApis = localStorage.getItem('filterApis');
+        if (savedFilterApis) {
+            this.setState({ filterApis: JSON.parse(savedFilterApis) });
+        }
+        // 恢复 selected
+        const savedSelected = localStorage.getItem('selected');
+        if (savedSelected) {
+            this.setState({ selected: JSON.parse(savedSelected) });
+        }
+        // 其它原有逻辑
         if (this.state.debug || this.state.token) {
             this.updateProgress(100);
             this.callGetApis();
@@ -276,6 +287,13 @@ class Home extends Component {
 
         const emptyRows = Math.max(0, rowsPerPage - visibleRows.length);
 
+        if (this.state.apisLoading) {
+          return <div>Loading...</div>;
+        }
+        if (this.state.error) {
+          return <div>加载失败: {this.state.error}</div>;
+        }
+
         return (
             <Fragment>
                 {this.state.redirect && <Redirect to="/login" /> }
@@ -291,41 +309,64 @@ class Home extends Component {
                                     onClick = {() => this.logout()} > Logout </Button>
                     </AppBar>
                     <TabPanel value={this.state.tab} index={0} style={{width: 1000, margin: '0 auto'}} >
-                        <Autocomplete
-                            multiple
-                            id="apis_selector"
-                            options={this.state.api_methods}
-                            getOptionLabel={(option) => `${option[0]} ${option[1]}`}
-                            defaultValue={[]}
-                            renderInput={(params) => (
-                                <TextField
-                                    {...params}
-                                    variant="standard"
-                                    label="Choose APIs"
-                                    placeholder="API..."
-                                    onKeyDown={(e) => {
-                                        if (e.code === 'Enter' && e.target.value) {
-                                            const apiList = e.target.value.split(',')
-                                            const newApiList = apiList.map(function (api_method) {
-                                                return api_method.trim()
-                                            })
-                                            let filterApis = []
-                                            while (newApiList.length > 0) {
-                                                const api_item = newApiList.pop();
-                                                const api_method = api_item.split(" ");
-                                                const new_api = api_method[0];
-                                                const new_method = api_method[1];
-                                                filterApis = filterApis.concat(this.state.api_methods.filter((api, method) => api === new_api && method === new_method))
+                        <div style={{ display: 'flex', alignItems: 'center', width: 1000, margin: '0 auto' }}>
+                            <Autocomplete
+                                multiple
+                                id="apis_selector"
+                                options={this.state.api_methods}
+                                getOptionLabel={(option) => `${option[0]} ${option[1]}`}
+                                defaultValue={[]}
+                                renderInput={(params) => (
+                                    <TextField
+                                        {...params}
+                                        variant="standard"
+                                        label="Choose APIs"
+                                        placeholder="API..."
+                                        onKeyDown={(e) => {
+                                            if (e.code === 'Enter' && e.target.value) {
+                                                const apiList = e.target.value.split(',')
+                                                const newApiList = apiList.map(function (api_method) {
+                                                    return api_method.trim()
+                                                })
+                                                let filterApis = []
+                                                while (newApiList.length > 0) {
+                                                    const api_item = newApiList.pop();
+                                                    const api_method = api_item.split(" ");
+                                                    const new_api = api_method[0];
+                                                    const new_method = api_method[1];
+                                                    filterApis = filterApis.concat(this.state.api_methods.filter((api, method) => api === new_api && method === new_method))
+                                                }
+                                                this.setFilterApis(filterApis)
                                             }
-                                            this.setFilterApis(filterApis)
-                                        }
+                                        }}
+                                    />
+                                )}
+                                onChange={(event, value) => this.setFilterApis(value)}
+                                value={this.state.filterApis}
+                                style={{ margin: 10, width: 980 }}
+                            />
+                            {this.state.selected.length > 0 && (
+                                <Button
+                                    variant="contained"
+                                    color="secondary"
+                                    style={{ marginLeft: 16, height: 40 }}
+                                    onClick={() => {
+                                        // 删除选中的api/method
+                                        const selectedSet = new Set(this.state.selected.map(item => JSON.stringify(item)));
+                                        const newFilterApis = this.state.filterApis.filter(item => !selectedSet.has(JSON.stringify(item)));
+                                        this.setState({
+                                            filterApis: newFilterApis,
+                                            selected: []
+                                        }, () => {
+                                            localStorage.setItem('filterApis', JSON.stringify(this.state.filterApis));
+                                            localStorage.setItem('selected', '[]');
+                                        });
                                     }}
-                                />
+                                >
+                                    Delete
+                                </Button>
                             )}
-                            onChange={(event, value) => this.setFilterApis(value)}
-                            value={this.state.filterApis}
-                            style={{ margin: 10, width: 980 }}
-                        />
+                        </div>
 
                         
 
@@ -345,10 +386,14 @@ class Home extends Component {
                                 />
                                 <TableBody>
                                 {visibleRows.map((row, index) => {
-                                    const isItemSelected = selected.includes(row);
-                                    const labelId = `enhanced-table-checkbox-${index}`;
                                     const api = row[0];
                                     const method = row[1];
+                                    const apiObj = this.state.apis[api];
+                                    const methodObj = apiObj ? apiObj[method] : undefined;
+                                    if (!apiObj || !methodObj) return null; // 跳过无效行
+
+                                    const isItemSelected = selected.includes(row);
+                                    const labelId = `enhanced-table-checkbox-${index}`;
 
                                     return (
                                     <TableRow
@@ -383,9 +428,26 @@ class Home extends Component {
                                             <Switch
                                                 color="primary"
                                                 edge="end"
-                                                onChange={(event) =>
-                                                    this.setStatus(index, event.target.checked)
-                                                }
+                                                onChange={async (event) => {
+                                                    const checked = event.target.checked;
+                                                    // 本地更新enabled
+                                                    this.setStatus(index, checked);
+                                                    // 构造api_config
+                                                    const apiConfig = { ...this.state.apis[api][method], enabled: checked };
+                                                    try {
+                                                        const response = await fetch('https://127.0.0.1/update_api_config', {
+                                                            method: 'POST',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify(apiConfig)
+                                                        });
+                                                        if (!response.ok) {
+                                                            const errText = await response.text();
+                                                            window.alert('update failed: ' + errText);
+                                                        }
+                                                    } catch (err) {
+                                                        window.alert('update failed: ' + err.message);
+                                                    }
+                                                }}
                                                 checked={this.state.apis[api][method].enabled}
                                             />
                                         </TableCell>
@@ -423,7 +485,17 @@ class Home extends Component {
                     <TabPanel value={this.state.tab} index={1} style={{width: 720, margin: '0 auto'}} >
                         Others Content
                     </TabPanel>
-                    <ApiConfigDialog onRef={ref => this.apiConfigDialog = ref} updateProgress={(value) => this.updateProgress(value)} domain={this.props.domain} token={this.state.token} refresh_token={this.state.refresh_token} refreshToken={(callback) => this.refreshToken(callback)} filterApis={this.state.filterApis} apis={this.state.apis} ></ApiConfigDialog>
+                    <ApiConfigDialog
+                        onRef={ref => this.apiConfigDialog = ref}
+                        updateProgress={value => this.updateProgress(value)}
+                        domain={this.props.domain}
+                        token={this.state.token}
+                        refresh_token={this.state.refresh_token}
+                        refreshToken={callback => this.refreshToken(callback)}
+                        filterApis={this.state.filterApis}
+                        apis={this.state.apis}
+                        onConfigSave={this.handleApiConfigSave}
+                    />
                     <Backdrop style={{ zIndex: 1000, color: '#fff' }} open={this.state.backdrop} onClick={() => {}}>
                         <CircularProgressWithLabel value={this.state.progress} progressisdisplay={this.state.progressIsDisplay} />
                     </Backdrop>
@@ -488,9 +560,9 @@ class Home extends Component {
     }
 
     setFilterApis(value) {
-        this.setState({
-            filterApis: value
-        })
+        this.setState({ filterApis: value }, () => {
+            localStorage.setItem('filterApis', JSON.stringify(this.state.filterApis));
+        });
     }
 
     checkApiAllEnabled() {
@@ -565,6 +637,7 @@ class Home extends Component {
 
     async callGetApis()  {
         const self = this;
+        self.setState({ apisLoading: true });
         if (self.state.debug) {
             try {
                 const response = await fetch(process.env.PUBLIC_URL + '/api_config.json');
@@ -580,19 +653,32 @@ class Home extends Component {
                 });
                 self.setState({
                     apis: jsonData,
-                    api_methods: api_methods
+                    api_methods: api_methods,
+                    apisLoading: false
                 });
             } catch (err) {
                 console.error(err.message);
+                self.setState({ apis: {}, apisLoading: false, error: err.message });
             }
         }
         else {
             self.setState({
                 apis: {},
-                api_methods: []
+                api_methods: [],
+                apisLoading: false
             });
         }
     }
+
+    handleApiConfigSave = (api, method, config) => {
+        this.setState(prevState => {
+            const apis = { ...prevState.apis };
+            if (apis[api] && apis[api][method]) {
+                apis[api][method].enabled = config.enabled;
+            }
+            return { apis };
+        });
+    };
 }
 
 const mapStateToProps = (state) => {
