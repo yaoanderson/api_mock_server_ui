@@ -32,6 +32,18 @@ import { visuallyHidden } from '@material-ui/utils';
 import './home.css'
 import { logoutAction } from '../../common/action'
 import ApiConfigDialog from '../../components/apiConfigDialog'
+import Dialog from '@material-ui/core/Dialog';
+import FormControl from '@material-ui/core/FormControl';
+import InputLabel from '@material-ui/core/InputLabel';
+import Select from '@material-ui/core/Select';
+import MenuItem from '@material-ui/core/MenuItem';
+import FormControlLabel from '@material-ui/core/FormControlLabel';
+import { withStyles } from '@material-ui/core/styles';
+import IconButton from '@material-ui/core/IconButton';
+import CloseIcon from '@material-ui/icons/Close';
+import DialogTitle from '@material-ui/core/DialogTitle';
+import DialogContent from '@material-ui/core/DialogContent';
+import DialogActions from '@material-ui/core/DialogActions';
 
 function CircularProgressWithLabel(props) {
     return (
@@ -182,6 +194,44 @@ function descendingComparator(a, b, orderBy) {
     rowCount: PropTypes.number.isRequired,
   };
 
+const AddDialogTitle = withStyles((theme) => ({
+    root: {
+        margin: 0,
+        padding: theme.spacing(2),
+    },
+    closeButton: {
+        position: 'absolute',
+        right: theme.spacing(1),
+        top: theme.spacing(1),
+        color: theme.palette.grey[500],
+    },
+}))((props) => {
+    const { children, classes, onClose, ...other } = props;
+    return (
+        <DialogTitle disableTypography className={classes.root} {...other}>
+            <Typography variant="h6">{children}</Typography>
+            {onClose ? (
+                <IconButton aria-label="close" className={classes.closeButton} onClick={onClose}>
+                    <CloseIcon />
+                </IconButton>
+            ) : null}
+        </DialogTitle>
+    );
+});
+
+const AddDialogContent = withStyles((theme) => ({
+    root: {
+        padding: theme.spacing(2),
+    },
+}))(DialogContent);
+
+const AddDialogActions = withStyles((theme) => ({
+    root: {
+        margin: 0,
+        padding: theme.spacing(1),
+    },
+}))(DialogActions);
+
 
 class Home extends Component {
     constructor(props) {
@@ -207,7 +257,12 @@ class Home extends Component {
             page: 0,
             rowsPerPage: 5,
             apisLoading: true,
-            error: null
+            error: null,
+            addApiDialogOpen: false,
+            newApiUrl: '',
+            newApiMethod: 'GET',
+            newApiMockEnabled: true,
+            deleteConfirmDialogOpen: false,
         }
     }
 
@@ -349,23 +404,20 @@ class Home extends Component {
                                 <Button
                                     variant="contained"
                                     color="secondary"
-                                    style={{ marginLeft: 16, height: 40 }}
-                                    onClick={() => {
-                                        // 删除选中的api/method
-                                        const selectedSet = new Set(this.state.selected.map(item => JSON.stringify(item)));
-                                        const newFilterApis = this.state.filterApis.filter(item => !selectedSet.has(JSON.stringify(item)));
-                                        this.setState({
-                                            filterApis: newFilterApis,
-                                            selected: []
-                                        }, () => {
-                                            localStorage.setItem('filterApis', JSON.stringify(this.state.filterApis));
-                                            localStorage.setItem('selected', '[]');
-                                        });
-                                    }}
+                                    style={{ marginLeft: 16, height: 40, textTransform: 'none' }}
+                                    onClick={() => this.setState({ deleteConfirmDialogOpen: true })}
                                 >
                                     Delete
                                 </Button>
                             )}
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                style={{ marginLeft: 16, height: 40, textTransform: 'none' }}
+                                onClick={() => this.setState({ addApiDialogOpen: true })}
+                            >
+                                Add
+                            </Button>
                         </div>
 
                         
@@ -500,6 +552,108 @@ class Home extends Component {
                         <CircularProgressWithLabel value={this.state.progress} progressisdisplay={this.state.progressIsDisplay} />
                     </Backdrop>
                 </div>
+                <Dialog
+                    open={this.state.addApiDialogOpen}
+                    onClose={() => this.setState({ addApiDialogOpen: false })}
+                    maxWidth="sm"
+                    fullWidth={true}
+                    PaperProps={{
+                        style: { borderRadius: 8, minWidth: 400, background: '#fff' }
+                    }}
+                >
+                    <AddDialogTitle onClose={() => this.setState({ addApiDialogOpen: false })}>
+                        Add New API
+                    </AddDialogTitle>
+                    <AddDialogContent dividers>
+                        <TextField
+                            label="API Url"
+                            value={this.state.newApiUrl}
+                            onChange={e => this.setState({ newApiUrl: e.target.value })}
+                            fullWidth
+                            margin="normal"
+                            style={{ marginTop: 0}}
+                        />
+                        <FormControl fullWidth margin="normal">
+                            <InputLabel>Method</InputLabel>
+                            <Select
+                                value={this.state.newApiMethod}
+                                onChange={e => this.setState({ newApiMethod: e.target.value })}
+                            >
+                                <MenuItem value="GET">GET</MenuItem>
+                                <MenuItem value="POST">POST</MenuItem>
+                                <MenuItem value="PUT">PUT</MenuItem>
+                                <MenuItem value="DELETE">DELETE</MenuItem>
+                            </Select>
+                        </FormControl>
+                        <FormControlLabel
+                            control={
+                                <Switch
+                                    checked={this.state.newApiMockEnabled}
+                                    onChange={e => this.setState({ newApiMockEnabled: e.target.checked })}
+                                    color="primary"
+                                />
+                            }
+                            label="Mock"
+                        />
+                    </AddDialogContent>
+                    <AddDialogActions>
+                        <Button onClick={() => this.setState({ addApiDialogOpen: false })}>Cancel</Button>
+                        <Button
+                            color="primary"
+                            variant="contained"
+                            onClick={this.handleAddApiSubmit}
+                            style={{ margin: 10 }}
+                        >
+                            Submit
+                        </Button>
+                    </AddDialogActions>
+                </Dialog>
+                <Dialog
+                    open={this.state.deleteConfirmDialogOpen}
+                    onClose={() => this.setState({ deleteConfirmDialogOpen: false })}
+                    maxWidth="xs"
+                    fullWidth={false}
+                >
+                    <DialogTitle>Confirm Delete</DialogTitle>
+                    <DialogContent>Are you sure you want to delete the selected APIs?</DialogContent>
+                    <DialogActions>
+                        <Button onClick={() => this.setState({ deleteConfirmDialogOpen: false })}>Cancel</Button>
+                        <Button
+                            color="secondary"
+                            variant="contained"
+                            onClick={async () => {
+                                // 原有删除逻辑
+                                const selectedSet = new Set(this.state.selected.map(item => JSON.stringify(item)));
+                                const newFilterApis = this.state.filterApis.filter(item => !selectedSet.has(JSON.stringify(item)));
+                                // 可选：发送后端请求
+                                try {
+                                    const response = await fetch('https://127.0.0.1/update_api_config', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ delete: this.state.selected }),
+                                    });
+                                    if (!response.ok) {
+                                        const errText = await response.text();
+                                        window.alert('delete failed: ' + errText);
+                                    }
+                                } catch (err) {
+                                    window.alert('delete failed: ' + err.message);
+                                }
+                                this.setState({
+                                    filterApis: newFilterApis,
+                                    selected: [],
+                                    deleteConfirmDialogOpen: false
+                                }, () => {
+                                    localStorage.setItem('filterApis', JSON.stringify(this.state.filterApis));
+                                    localStorage.setItem('selected', '[]');
+                                });
+                            }}
+                            style={{ margin: 10 }}
+                        >
+                            Ok
+                        </Button>
+                    </DialogActions>
+                </Dialog>
             </Fragment>
         )
     }
@@ -678,6 +832,46 @@ class Home extends Component {
             }
             return { apis };
         });
+    };
+
+    handleAddApiSubmit = async () => {
+        const { newApiUrl, newApiMethod, newApiMockEnabled, apis } = this.state;
+        const apiConfig = {
+            enabled: newApiMockEnabled,
+            // 你可以根据需要添加其它字段
+        };
+        try {
+            const response = await fetch('https://127.0.0.1/update_api_config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    api: newApiUrl,
+                    method: newApiMethod,
+                    config: apiConfig,
+                }),
+            });
+            if (response.ok) {
+                // 更新本地apis
+                this.setState(prevState => {
+                    const newApis = { ...prevState.apis };
+                    if (!newApis[newApiUrl]) newApis[newApiUrl] = {};
+                    newApis[newApiUrl][newApiMethod] = apiConfig;
+                    return {
+                        apis: newApis,
+                        addApiDialogOpen: false,
+                        newApiUrl: '',
+                        newApiMethod: 'GET',
+                        newApiMockEnabled: true,
+                    };
+                });
+                window.alert('API added successfully!');
+            } else {
+                const errText = await response.text();
+                window.alert('Add failed: ' + errText);
+            }
+        } catch (err) {
+            window.alert('Add failed: ' + err.message);
+        }
     };
 }
 

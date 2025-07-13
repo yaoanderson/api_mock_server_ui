@@ -100,7 +100,7 @@ class ApiConfigDialog extends Component {
         const { configMode } = this.state;
         return (
             <Fragment>
-                <Dialog maxWidth='sm' fullWidth={true} style={{ zIndex: 100 }} onClose={() => this.closeProfile()} aria-labelledby="customized-dialog-title" open={this.state.ApiConfigIsOpen} >
+                <Dialog maxWidth='sm' fullWidth={true} style={{ zIndex: 100 }} onClose={() => this.closeConfig()} aria-labelledby="customized-dialog-title" open={this.state.ApiConfigIsOpen} >
                     <DialogTitle id="customized-dialog-title" onClose={() => this.closeConfig()}>
                         API Config
                     </DialogTitle>
@@ -126,7 +126,7 @@ class ApiConfigDialog extends Component {
                                     </Typography>
                                 </Grid>
                             </Grid>
-                            <Grid item style={{ width: 560, border: '2px solid #e0e0e0', borderRadius: '8px', padding: '20px 10px 20px 10px', backgroundColor: '#fafafa', marginLeft: 10 }}>
+                            <Grid item style={{ width: 560, border: '2px solid #e0e0e0', borderRadius: '8px', padding: '20px 20px 20px 20px', backgroundColor: '#fafafa', marginLeft: 10 }}>
                                 <Grid container direction="column" spacing={2} style={{ marginLeft: 0, width: '100%' }}>
                                     <Grid item style={{ marginLeft: 0 }}>
                                         <TextField
@@ -145,7 +145,7 @@ class ApiConfigDialog extends Component {
                                     </Grid>
                                     <Grid item style={{ marginLeft: 0 }}>
                                         <Typography id="speed-slider" gutterBottom style={{ textAlign: 'left', marginLeft: 0 }}>
-                                            Transmission Speed
+                                            Transfer Rate
                                         </Typography>
                                         <Slider
                                             value={this.state.selectedApi.speed !== undefined ? Number(this.state.selectedApi.speed) : 60}
@@ -153,17 +153,17 @@ class ApiConfigDialog extends Component {
                                             aria-labelledby="speed-slider"
                                             step={20}
                                             marks={[
-                                                { value: 0, label: '0' },
-                                                { value: 20, label: '20' },
-                                                { value: 40, label: '40' },
-                                                { value: 60, label: '60' },
-                                                { value: 80, label: '80' },
-                                                { value: 100, label: '100' }
+                                                { value: 0, label: '0%' },
+                                                { value: 20, label: '20%' },
+                                                { value: 40, label: '40%' },
+                                                { value: 60, label: '60%' },
+                                                { value: 80, label: '80%' },
+                                                { value: 100, label: '100%' }
                                             ]}
                                             min={0}
                                             max={100}
                                             valueLabelDisplay="auto"
-                                            style={{ marginLeft: 0 }}
+                                            style={{ marginLeft: 0, marginRight: 0 }}
                                             disabled={configMode !== 'basic'}
                                         />
                                     </Grid>
