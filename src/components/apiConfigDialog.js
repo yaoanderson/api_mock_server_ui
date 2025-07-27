@@ -13,9 +13,7 @@ import Grid from '@material-ui/core/Grid';
 import Slider from '@material-ui/core/Slider';
 import Switch from '@material-ui/core/Switch';
 import FormControlLabel from '@material-ui/core/FormControlLabel';
-import axios from 'axios'
 import Radio from '@material-ui/core/Radio';
-import RadioGroup from '@material-ui/core/RadioGroup';
 
 const styles = (theme) => ({
     root: {
@@ -128,14 +126,15 @@ class ApiConfigDialog extends Component {
                             </Grid>
                             <Grid item style={{ width: 560, border: '2px solid #e0e0e0', borderRadius: '8px', padding: '20px 20px 20px 20px', backgroundColor: '#fafafa', marginLeft: 10 }}>
                                 <Grid container direction="column" spacing={2} style={{ marginLeft: 0, width: '100%' }}>
+                                    {/* Parms */}
                                     <Grid item style={{ marginLeft: 0 }}>
                                         <TextField
-                                            label="B Value"
-                                            value={this.state.selectedApi.b || ""}
-                                            placeholder="Enter B value"
+                                            label="Parms"
+                                            value={this.state.selectedApi.parms || ''}
+                                            placeholder="Enter Parms"
                                             variant="outlined"
                                             fullWidth
-                                            onChange={(event) => this.setFieldValue("b", event.target.value)}
+                                            onChange={(event) => this.setFieldValue("parms", event.target.value)}
                                             InputProps={{
                                                 readOnly: false,
                                                 disabled: configMode !== 'basic'
@@ -143,6 +142,35 @@ class ApiConfigDialog extends Component {
                                             style={{ marginLeft: 0 }}
                                         />
                                     </Grid>
+                                    {/* Content Type */}
+                                    <Grid item style={{ marginLeft: 0 }}>
+                                        <TextField
+                                            select
+                                            label="Content Type"
+                                            value={this.state.selectedApi.content_type || ''}
+                                            onChange={(event) => this.setFieldValue("content_type", event.target.value)}
+                                            variant="outlined"
+                                            fullWidth
+                                            SelectProps={{ native: true }}
+                                            InputProps={{
+                                                readOnly: false,
+                                                disabled: configMode !== 'basic'
+                                            }}
+                                            style={{ marginLeft: 0 }}
+                                        >
+                                            <option value="application/octet-stream">application/octet-stream</option>
+                                            <option value="text/html">text/html</option>
+                                            <option value="application/javascript">application/javascript</option>
+                                            <option value="application/json">application/json</option>
+                                            <option value="application/xml">application/xml</option>
+                                            <option value="text/css">text/css</option>
+                                            <option value="image/vnd.microsoft.icon">image/vnd.microsoft.icon</option>
+                                            <option value="image/png">image/png</option>
+                                            <option value="image/jpeg">image/jpeg</option>
+                                            <option value="image/gif">image/gif</option>
+                                        </TextField>
+                                    </Grid>
+                                    {/* Transfer Rate */}
                                     <Grid item style={{ marginLeft: 0 }}>
                                         <Typography id="speed-slider" gutterBottom style={{ textAlign: 'left', marginLeft: 0 }}>
                                             Transfer Rate
@@ -165,6 +193,20 @@ class ApiConfigDialog extends Component {
                                             valueLabelDisplay="auto"
                                             style={{ marginLeft: 0, marginRight: 0 }}
                                             disabled={configMode !== 'basic'}
+                                        />
+                                    </Grid>
+                                    {/* Mock Switch */}
+                                    <Grid item style={{ marginLeft: 0 }}>
+                                        <FormControlLabel
+                                            control={
+                                                <Switch
+                                                    checked={!!this.state.selectedApi.enabled}
+                                                    onChange={e => this.setFieldValue("enabled", e.target.checked)}
+                                                    color="primary"
+                                                    disabled={configMode !== 'basic'}
+                                                />
+                                            }
+                                            label="Mock"
                                         />
                                     </Grid>
                                 </Grid>
@@ -217,33 +259,21 @@ class ApiConfigDialog extends Component {
     openConfig(item) {
         const api_method = item.split(" ");
         const filterApi = this.props.apis[api_method[0]][api_method[1]];
+        const selectedApi = {
+            path: api_method[0],
+            method: api_method[1],
+            enabled: filterApi.enabled,
+            parms: filterApi.parms || '',
+            content_type: filterApi.content_type || '',
+            speed: filterApi.speed !== undefined ? filterApi.speed : 60
+        };
+        var api_config = {...selectedApi};
+        delete api_config.path;
+        delete api_config.method;
         this.setState({
             ApiConfigIsOpen: true,
-            selectedApi: filterApi,
-            api_config: JSON.stringify(filterApi, null, 2)
-        })
-    }
-
-    addConfig() {
-        this.setState({
-            ApiConfigIsOpen: true,
-            selectedUser: {
-                first_name: "",
-                last_name: "",
-                language_locale_key: "",
-                external_id: "",
-                emailIsDisabled: false,
-                email: "",
-                usernameIsDisabled: false,
-                username: "",
-                company_id: ""
-            },
-            companies: [],
-            companyId: "",
-            companyIdToNameMap: {},
-            method: "post"
-        }, () => {
-            this.getCompanies();
+            selectedApi,
+            api_config: JSON.stringify(api_config, null, 2)
         })
     }
 
@@ -256,50 +286,36 @@ class ApiConfigDialog extends Component {
 
     setFieldValue(key, value) {
         const selectedApi = { ...this.state.selectedApi };
-        if (key === 'b') {
-            // 更新b字段并同步到api_config
-            selectedApi.b = value;
+        if (key === 'parms' || key === 'content_type' || key === 'speed' || key === 'enabled') {
+            selectedApi[key] = key === 'speed' ? Number(value) : value;
+            if (key === 'enabled') {
+                selectedApi[key] = +value;
+            }
             let jsonObj;
             try {
                 jsonObj = JSON.parse(this.state.api_config || JSON.stringify(selectedApi));
             } catch {
                 jsonObj = { ...selectedApi };
             }
-            jsonObj.b = value;
-            this.setState({
-                selectedApi,
-                api_config: JSON.stringify(jsonObj, null, 2)
-            });
-        } else if (key === 'speed') {
-            // 新增：同步speed字段到api_config
-            selectedApi.speed = Number(value);
-            let jsonObj;
-            try {
-                jsonObj = JSON.parse(this.state.api_config || JSON.stringify(selectedApi));
-            } catch {
-                jsonObj = { ...selectedApi };
-            }
-            jsonObj.speed = Number(value);
+            jsonObj[key] = selectedApi[key];
+
             this.setState({
                 selectedApi,
                 api_config: JSON.stringify(jsonObj, null, 2)
             });
         } else if (key === 'api_config') {
-            // 更新api_config并同步b字段
             let jsonObj;
             try {
                 jsonObj = JSON.parse(value);
             } catch {
                 jsonObj = null;
             }
-            // 只有在 advanced 模式下才同步 selectedApi
             if (this.state.configMode === 'advanced' && jsonObj) {
                 this.setState({
                     api_config: value,
                     selectedApi: {
-                        ...selectedApi,
-                        b: jsonObj.b !== undefined ? jsonObj.b : selectedApi.b,
-                        speed: jsonObj.speed !== undefined ? Number(jsonObj.speed) : selectedApi.speed
+                        ...this.state.selectedApi,
+                        ...jsonObj
                     }
                 });
             } else {
@@ -315,64 +331,28 @@ class ApiConfigDialog extends Component {
         }
     }
 
-    async submitProfile() {
-        const self = this;
-        let data = self.state.selectedApi;
-        const payload = {
-            ...data,
-            first_name: self.state.selectedApi.first_name,
-            last_name: self.state.selectedApi.last_name,
-            language_locale_key: self.state.selectedApi.language_locale_key,
-            external_id: self.state.selectedApi.external_id,
-            email: self.state.selectedApi.email,
-            username: self.state.selectedApi.username,
-            send_welcome_email: false,
-            company_id: self.state.companyId,
-            company_name: self.state.companyIdToNameMap[self.state.companyId]
-        }
-        let callObject, url;
-        if (self.state.method === "put") {
-            callObject = axios.put;
-            url = `https://${self.props.domain}.com:443/rbac-api/v1/api/${data.id}`;
-        }
-        else if (self.state.method === "post") {
-            callObject = axios.post;
-            url = `https://${self.props.domain}.com:443/rbac-api/v1/apis`;
-        }
-        await callObject(url,
-            payload,
-            {
-                headers: {
-                    'Authorization': `Bearer ${self.props.token}`
-                }
-            }
-        )
-        .then(function (response) {
-            if (self.state.method === "post") {
-                self.props.addPropsUser(response.data)
-            }
-            self.closeProfile();
-        })
-        .catch(function (error) {
-            console.log(error);
-            if (error.response.statusText === "Unauthorized") {
-                self.props.refreshToken(() => {
-                    self.submitProfile();
-                });
-            }
-        })
-    }
-
     async submitConfig() {
         try {
-            const response = await fetch('https://127.0.0.1/update_api_config', {
-                method: 'POST',
+            const { path, method, parms, content_type, enabled, speed } = this.state.selectedApi;
+            const body = JSON.stringify({
+                path,
+                method,
+                parms,
+                content_type,
+                enabled: +enabled,
+                speed
+            });
+            const response = await fetch('http://127.0.0.1:8083/update_api_config', {
+                method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: this.state.api_config
+                body
             });
             if (response.ok) {
+                if (typeof this.props.onConfigSave === 'function') {
+                    this.props.onConfigSave(path, method, { enabled, parms, content_type, speed });
+                }
                 window.alert('submit success');
                 this.setState({
                     ApiConfigIsOpen: false,

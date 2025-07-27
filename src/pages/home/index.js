@@ -44,6 +44,7 @@ import CloseIcon from '@material-ui/icons/Close';
 import DialogTitle from '@material-ui/core/DialogTitle';
 import DialogContent from '@material-ui/core/DialogContent';
 import DialogActions from '@material-ui/core/DialogActions';
+import Slider from '@material-ui/core/Slider';
 
 function CircularProgressWithLabel(props) {
     return (
@@ -262,6 +263,9 @@ class Home extends Component {
             newApiUrl: '',
             newApiMethod: 'GET',
             newApiMockEnabled: true,
+            newApiParms: '',
+            newApiContentType: '',
+            newApiSpeed: 60, // 新增Transfer Rate字段，默认60
             deleteConfirmDialogOpen: false,
         }
     }
@@ -313,19 +317,15 @@ class Home extends Component {
       };
 
     componentDidMount() {
-        // 页面刷新时清理 filterApis
         localStorage.removeItem('filterApis');
-        // 恢复 filterApis
         const savedFilterApis = localStorage.getItem('filterApis');
         if (savedFilterApis) {
             this.setState({ filterApis: JSON.parse(savedFilterApis) });
         }
-        // 恢复 selected
         const savedSelected = localStorage.getItem('selected');
         if (savedSelected) {
             this.setState({ selected: JSON.parse(savedSelected) });
         }
-        // 其它原有逻辑
         if (this.state.debug || this.state.token) {
             this.updateProgress(100);
             this.callGetApis();
@@ -399,6 +399,9 @@ class Home extends Component {
                                 onChange={(event, value) => this.setFilterApis(value)}
                                 value={this.state.filterApis}
                                 style={{ margin: 10, width: 980 }}
+                                getOptionSelected={(option, value) =>
+                                    option[0] === value[0] && option[1] === value[1]
+                                }
                             />
                             {this.state.selected.length > 0 && (
                                 <Button
@@ -420,8 +423,6 @@ class Home extends Component {
                             </Button>
                         </div>
 
-                        
-
                         <TableContainer>
                             <Table
                                 sx={{ minWidth: 750 }}
@@ -442,7 +443,7 @@ class Home extends Component {
                                     const method = row[1];
                                     const apiObj = this.state.apis[api];
                                     const methodObj = apiObj ? apiObj[method] : undefined;
-                                    if (!apiObj || !methodObj) return null; // 跳过无效行
+                                    if (!apiObj || !methodObj) return null;
 
                                     const isItemSelected = selected.includes(row);
                                     const labelId = `enhanced-table-checkbox-${index}`;
@@ -481,26 +482,36 @@ class Home extends Component {
                                                 color="primary"
                                                 edge="end"
                                                 onChange={async (event) => {
+                                                    const self = this;
                                                     const checked = event.target.checked;
-                                                    // 本地更新enabled
-                                                    this.setStatus(index, checked);
-                                                    // 构造api_config
-                                                    const apiConfig = { ...this.state.apis[api][method], enabled: checked };
                                                     try {
-                                                        const response = await fetch('https://127.0.0.1/update_api_config', {
-                                                            method: 'POST',
+                                                        const response = await fetch('http://127.0.0.1:8083/update_api_config', {
+                                                            method: 'PUT',
                                                             headers: { 'Content-Type': 'application/json' },
-                                                            body: JSON.stringify(apiConfig)
+                                                            body: JSON.stringify({
+                                                                path: api,
+                                                                method: method,
+                                                                enabled: +checked
+                                                            })
                                                         });
                                                         if (!response.ok) {
                                                             const errText = await response.text();
                                                             window.alert('update failed: ' + errText);
                                                         }
+                                                        else {
+                                                            self.setState(prevState => {
+                                                                const newApis = { ...prevState.apis };
+                                                                if (newApis[api] && newApis[api][method]) {
+                                                                    newApis[api][method].enabled = +checked;
+                                                                }
+                                                                return { apis: newApis };
+                                                            });
+                                                        }
                                                     } catch (err) {
                                                         window.alert('update failed: ' + err.message);
                                                     }
                                                 }}
-                                                checked={this.state.apis[api][method].enabled}
+                                                checked={!!this.state.apis[api][method].enabled}
                                             />
                                         </TableCell>
                                         <TableCell align="center">
@@ -585,6 +596,54 @@ class Home extends Component {
                                 <MenuItem value="DELETE">DELETE</MenuItem>
                             </Select>
                         </FormControl>
+                        <TextField
+                            label="Parms"
+                            value={this.state.newApiParms}
+                            onChange={e => this.setState({ newApiParms: e.target.value })}
+                            fullWidth
+                            margin="normal"
+                        />
+                        <FormControl fullWidth margin="normal">
+                            <InputLabel>Content Type</InputLabel>
+                            <Select
+                                value={this.state.newApiContentType}
+                                onChange={e => this.setState({ newApiContentType: e.target.value })}
+                            >
+                                <MenuItem value="application/octet-stream">application/octet-stream</MenuItem>
+                                <MenuItem value="text/html">text/html</MenuItem>
+                                <MenuItem value="application/javascript">application/javascript</MenuItem>
+                                <MenuItem value="application/json">application/json</MenuItem>
+                                <MenuItem value="application/xml">application/xml</MenuItem>
+                                <MenuItem value="text/css">text/css</MenuItem>
+                                <MenuItem value="image/vnd.microsoft.icon">image/vnd.microsoft.icon</MenuItem>
+                                <MenuItem value="image/png">image/png</MenuItem>
+                                <MenuItem value="image/jpeg">image/jpeg</MenuItem>
+                                <MenuItem value="image/gif">image/gif</MenuItem>
+                            </Select>
+                        </FormControl>
+                        <div style={{ margin: '16px 0', width: '97%' }}>
+                            <Typography id="speed-slider" gutterBottom style={{ textAlign: 'left' }}>
+                                Transfer Rate
+                            </Typography>
+                            <Slider
+                                value={this.state.newApiSpeed}
+                                onChange={(event, newValue) => this.setState({ newApiSpeed: newValue })}
+                                aria-labelledby="speed-slider"
+                                step={20}
+                                marks={[
+                                    { value: 0, label: '0%' },
+                                    { value: 20, label: '20%' },
+                                    { value: 40, label: '40%' },
+                                    { value: 60, label: '60%' },
+                                    { value: 80, label: '80%' },
+                                    { value: 100, label: '100%' }
+                                ]}
+                                min={0}
+                                max={100}
+                                valueLabelDisplay="auto"
+                                style={{ width: '100%' }}
+                            />
+                        </div>
                         <FormControlLabel
                             control={
                                 <Switch
@@ -622,31 +681,58 @@ class Home extends Component {
                             color="secondary"
                             variant="contained"
                             onClick={async () => {
-                                // 原有删除逻辑
-                                const selectedSet = new Set(this.state.selected.map(item => JSON.stringify(item)));
-                                const newFilterApis = this.state.filterApis.filter(item => !selectedSet.has(JSON.stringify(item)));
-                                // 可选：发送后端请求
-                                try {
-                                    const response = await fetch('https://127.0.0.1/update_api_config', {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ delete: this.state.selected }),
-                                    });
-                                    if (!response.ok) {
-                                        const errText = await response.text();
-                                        window.alert('delete failed: ' + errText);
+                                let selected = [...this.state.selected];
+                                let filterApis = [...this.state.filterApis];
+                                let apis = { ...this.state.apis };
+                                let failed = false;
+                                for (let i = 0; i < this.state.selected.length; i++) {
+                                    const [path, method] = this.state.selected[i];
+                                    try {
+                                        const response = await fetch('http://127.0.0.1:8083/update_api_config', {
+                                            method: 'DELETE',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ path, method }),
+                                        });
+                                        if (!response.ok) {
+                                            const errText = await response.text();
+                                            window.alert('delete failed: ' + errText);
+                                            failed = true;
+                                            continue;
+                                        }
+                                        selected = selected.filter(item => !(item[0] === path && item[1] === method));
+                                        filterApis = filterApis.filter(item => !(item[0] === path && item[1] === method));
+                                        if (apis[path] && apis[path][method]) {
+                                            delete apis[path][method];
+                                            if (Object.keys(apis[path]).length === 0) {
+                                                delete apis[path];
+                                            }
+                                        }
+                                    } catch (err) {
+                                        window.alert('delete failed: ' + err.message);
+                                        failed = true;
                                     }
-                                } catch (err) {
-                                    window.alert('delete failed: ' + err.message);
                                 }
-                                this.setState({
-                                    filterApis: newFilterApis,
-                                    selected: [],
-                                    deleteConfirmDialogOpen: false
-                                }, () => {
-                                    localStorage.setItem('filterApis', JSON.stringify(this.state.filterApis));
-                                    localStorage.setItem('selected', '[]');
+                                let api_methods = [];
+                                Object.entries(apis).forEach(([api, value]) => {
+                                    Object.keys(value).forEach(method => {
+                                        api_methods.push([api, method]);
+                                    });
                                 });
+                                const validApiMethodsSet = new Set(api_methods.map(item => JSON.stringify(item)));
+                                filterApis = filterApis.filter(item => validApiMethodsSet.has(JSON.stringify(item)));
+
+                                localStorage.setItem('filterApis', JSON.stringify(filterApis));
+                                localStorage.setItem('selected', JSON.stringify(selected));
+                                this.setState({
+                                    apis,
+                                    api_methods,
+                                    filterApis,
+                                    selected,
+                                    deleteConfirmDialogOpen: false
+                                });
+                                if (!failed) {
+                                    window.alert('All selected APIs deleted successfully!');
+                                }
                             }}
                             style={{ margin: 10 }}
                         >
@@ -705,9 +791,9 @@ class Home extends Component {
                 continue;
             }
             let id = self.state.filterApis[i];
-            const api = id.split(" ")[0];
-            const method = id.split(" ")[1];
-            if (self.state.apis[api][method].enabled !== status) {
+            const api = id[0];
+            const method = id[1];
+            if (!!self.state.apis[api][method].enabled !== status) {
                 self.callUpdateApi(api, method, status);
             }
         }
@@ -794,11 +880,15 @@ class Home extends Component {
         self.setState({ apisLoading: true });
         if (self.state.debug) {
             try {
-                const response = await fetch(process.env.PUBLIC_URL + '/api_config.json');
+                const response = await fetch('http://127.0.0.1:8083/update_api_config', {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' }
+                });
                 if (!response.ok) {
                   throw new Error('Network response was not ok');
                 }
-                const jsonData = await response.json();
+                var jsonData = await response.json();
+                jsonData = JSON.parse(jsonData["content"])
                 let api_methods = []
                 Object.entries(jsonData).forEach(([api, value]) => {
                     Object.keys(value).forEach(method => {
@@ -828,40 +918,61 @@ class Home extends Component {
         this.setState(prevState => {
             const apis = { ...prevState.apis };
             if (apis[api] && apis[api][method]) {
-                apis[api][method].enabled = config.enabled;
+                apis[api][method] = {
+                    ...apis[api][method],
+                    ...config
+                };
             }
             return { apis };
         });
     };
 
     handleAddApiSubmit = async () => {
-        const { newApiUrl, newApiMethod, newApiMockEnabled, apis } = this.state;
+        const { newApiUrl, newApiMethod, newApiMockEnabled, newApiParms, newApiContentType, newApiSpeed } = this.state;
         const apiConfig = {
             enabled: newApiMockEnabled,
-            // 你可以根据需要添加其它字段
+            parms: newApiParms,
+            content_type: newApiContentType,
+            speed: newApiSpeed,
+            origin: newApiUrl
         };
         try {
-            const response = await fetch('https://127.0.0.1/update_api_config', {
+            const response = await fetch('http://127.0.0.1:8083/update_api_config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    api: newApiUrl,
+                    path: newApiUrl,
                     method: newApiMethod,
-                    config: apiConfig,
+                    parms: newApiParms,
+                    content_type: newApiContentType,
+                    enabled: +newApiMockEnabled,
+                    speed: newApiSpeed
                 }),
             });
             if (response.ok) {
-                // 更新本地apis
                 this.setState(prevState => {
                     const newApis = { ...prevState.apis };
                     if (!newApis[newApiUrl]) newApis[newApiUrl] = {};
                     newApis[newApiUrl][newApiMethod] = apiConfig;
+                    const newFilterApis = Array.isArray(prevState.filterApis) ? [...prevState.filterApis] : [];
+                    const api_methods = this.state.api_methods;
+                    const newApiMethodItem = api_methods.find(
+                        item => item[0] === newApiUrl && item[1] === newApiMethod
+                    );
+                    if (newApiMethodItem && !newFilterApis.some(item => item[0] === newApiUrl && item[1] === newApiMethod)) {
+                        newFilterApis.push(newApiMethodItem);
+                    }
+                    localStorage.setItem('filterApis', JSON.stringify(newFilterApis));
                     return {
                         apis: newApis,
+                        filterApis: newFilterApis,
                         addApiDialogOpen: false,
                         newApiUrl: '',
                         newApiMethod: 'GET',
                         newApiMockEnabled: true,
+                        newApiParms: '',
+                        newApiContentType: '',
+                        newApiSpeed: 60,
                     };
                 });
                 window.alert('API added successfully!');
