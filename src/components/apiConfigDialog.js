@@ -207,6 +207,8 @@ class ApiConfigDialog extends Component {
                                                 />
                                             }
                                             label="Mock"
+                                            labelPlacement="start"
+                                            style={{ marginLeft: 0 }}
                                         />
                                     </Grid>
                                 </Grid>
@@ -342,7 +344,7 @@ class ApiConfigDialog extends Component {
                 enabled: +enabled,
                 speed
             });
-            const response = await fetch('http://127.0.0.1:8083/update_api_config', {
+            const response = await fetch(`${(this.props.host || 'http://127.0.0.1')}:${(this.props.port || '8083')}/update_api_config`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'

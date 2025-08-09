@@ -6,13 +6,15 @@ const initialState = user ? {
   username: user.username,
   domain: user.domain,
   token: user.token,
-  refresh_token: user.refresh_token
+  refresh_token: user.refresh_token,
+  debug: !!user.debug
 } : {
   isLogin: false,
   username: "",
   domain: "",
   token: "",
-  refresh_token: ""
+  refresh_token: "",
+  debug: false
 }
 
 const reducer = (state = initialState, action)=> {
@@ -39,7 +41,8 @@ const reducer = (state = initialState, action)=> {
         username: "",
         domain: "",
         token: "",
-        refresh_token: ""
+        refresh_token: "",
+        debug: false
       }
     default:
       return state

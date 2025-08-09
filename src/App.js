@@ -1,10 +1,22 @@
 import { HashRouter, Route, Switch, Redirect } from 'react-router-dom'
-import { Provider } from 'react-redux'
+import { Provider, useSelector } from 'react-redux'
 
 import './App.css';
 import Login from './pages/login'
 import Home from './pages/home'
 import store from './common/store'
+
+function PrivateRoute({ component: Component, ...rest }) {
+  const isLogin = useSelector((state) => state.isLogin);
+  return (
+    <Route
+      {...rest}
+      render={(props) => (
+        isLogin ? <Component {...props} /> : <Redirect to="/login" />
+      )}
+    />
+  );
+}
 
 function App() {
   return (
@@ -13,7 +25,7 @@ function App() {
         <HashRouter>
           <Switch>
             <Route path="/login" component={Login} />
-            <Route path="/home" component={Home} />
+            <PrivateRoute path="/home" component={Home} />
             <Route exact path="/" render={() => (<Redirect to="/home" />)} />
           </Switch>
         </HashRouter>

@@ -1,5 +1,5 @@
 import { Fragment, Component } from 'react'
-import { Redirect } from "react-router";
+import { Redirect } from 'react-router-dom';
 import { connect } from 'react-redux'
 import axios from 'axios'
 
@@ -17,6 +17,7 @@ import SettingsIcon from '@material-ui/icons/Settings';
 import CircularProgress from '@material-ui/core/CircularProgress';
 import Backdrop from '@material-ui/core/Backdrop';
 import PropTypes from 'prop-types';
+import DescriptionIcon from '@material-ui/icons/Description';
 
 import Table from '@material-ui/core/Table';
 import TableBody from '@material-ui/core/TableBody';
@@ -45,6 +46,10 @@ import DialogTitle from '@material-ui/core/DialogTitle';
 import DialogContent from '@material-ui/core/DialogContent';
 import DialogActions from '@material-ui/core/DialogActions';
 import Slider from '@material-ui/core/Slider';
+import ExpandMoreIcon from '@material-ui/icons/ExpandMore';
+import ExpandLessIcon from '@material-ui/icons/ExpandLess';
+import Tooltip from '@material-ui/core/Tooltip';
+import Radio from '@material-ui/core/Radio';
 
 function CircularProgressWithLabel(props) {
     return (
@@ -135,6 +140,12 @@ function descendingComparator(a, b, orderBy) {
       numeric: false,
       disablePadding: false,
       label: 'CONFIG',
+    },
+    {
+      id: 'file',
+      numeric: false,
+      disablePadding: false,
+      label: 'FILE',
     }
   ];
   
@@ -240,7 +251,7 @@ class Home extends Component {
         // 优先从localStorage恢复token
         const token = props.token || localStorage.getItem('token') || '';
         this.state = {
-            debug: true,
+            debug: this.props.debug ?? false,
             redirect: props.isLogin ? false : true,
             progress: 0,
             progressIsDisplay: 'none',
@@ -252,12 +263,14 @@ class Home extends Component {
             api_all_enabled: false,
             token,
             refresh_token: props.refresh_token,
+            host: localStorage.getItem('host') || 'http://127.0.0.1',
+            port: localStorage.getItem('port') || '8083',
             order: 'asc',
             orderBy: 'api',
             selected: [],
             page: 0,
             rowsPerPage: 5,
-            apisLoading: true,
+            apisLoading: false,
             error: null,
             addApiDialogOpen: false,
             newApiUrl: '',
@@ -267,6 +280,17 @@ class Home extends Component {
             newApiContentType: '',
             newApiSpeed: 60, // 新增Transfer Rate字段，默认60
             deleteConfirmDialogOpen: false,
+            fileDialogOpen: false,
+            fileLoading: false,
+            fileError: null,
+            currentFileInfo: { api: '', method: '', filePath: '', fileName: '' },
+            fileName: '',
+            fileContent: '',
+            fileContentType: 'application/json',
+            fileCollapsed: true,
+            selectedFile: null,
+            selectedFileName: '',
+            fileEditMode: 'content',
         }
     }
 
@@ -326,13 +350,16 @@ class Home extends Component {
         if (savedSelected) {
             this.setState({ selected: JSON.parse(savedSelected) });
         }
-        if (this.state.debug || this.state.token) {
+        if (this.props.isLogin && (this.state.debug || this.state.token)) {
             this.updateProgress(100);
             this.callGetApis();
         }
     }
 
     render() {
+        if (!this.props.isLogin) {
+            return <Redirect to="/login" />;
+        }
         const { order, orderBy, selected, page, rowsPerPage } = this.state;
         var rows = this.state.filterApis || [];
 
@@ -485,7 +512,7 @@ class Home extends Component {
                                                     const self = this;
                                                     const checked = event.target.checked;
                                                     try {
-                                                        const response = await fetch('http://127.0.0.1:8083/update_api_config', {
+                                                        const response = await fetch(`${this.state.host}:${this.state.port}/update_api_config`, {
                                                             method: 'PUT',
                                                             headers: { 'Content-Type': 'application/json' },
                                                             body: JSON.stringify({
@@ -520,6 +547,12 @@ class Home extends Component {
                                                 onClick={(e) => { e.stopPropagation(); this.openConfig(`${api} ${method}`); }} 
                                             />
                                         </TableCell>
+                                        <TableCell align="center">
+                                            <DescriptionIcon
+                                                style={{ cursor: 'pointer', color: 'rgba(0, 0, 0, 0.54)' }}
+                                                onClick={(e) => { e.stopPropagation(); this.openFileInfo(api, method); }}
+                                            />
+                                        </TableCell>
                                     </TableRow>
                                     );
                                 })}
@@ -548,17 +581,19 @@ class Home extends Component {
                     <TabPanel value={this.state.tab} index={1} style={{width: 720, margin: '0 auto'}} >
                         Others Content
                     </TabPanel>
-                    <ApiConfigDialog
-                        onRef={ref => this.apiConfigDialog = ref}
-                        updateProgress={value => this.updateProgress(value)}
-                        domain={this.props.domain}
-                        token={this.state.token}
-                        refresh_token={this.state.refresh_token}
-                        refreshToken={callback => this.refreshToken(callback)}
-                        filterApis={this.state.filterApis}
-                        apis={this.state.apis}
-                        onConfigSave={this.handleApiConfigSave}
-                    />
+                        <ApiConfigDialog
+                            onRef={ref => this.apiConfigDialog = ref}
+                            updateProgress={value => this.updateProgress(value)}
+                            domain={this.props.domain}
+                            token={this.state.token}
+                            refresh_token={this.state.refresh_token}
+                            refreshToken={callback => this.refreshToken(callback)}
+                            filterApis={this.state.filterApis}
+                            apis={this.state.apis}
+                            host={this.state.host}
+                            port={this.state.port}
+                            onConfigSave={this.handleApiConfigSave}
+                        />
                     <Backdrop style={{ zIndex: 1000, color: '#fff' }} open={this.state.backdrop} onClick={() => {}}>
                         <CircularProgressWithLabel value={this.state.progress} progressisdisplay={this.state.progressIsDisplay} />
                     </Backdrop>
@@ -653,6 +688,8 @@ class Home extends Component {
                                 />
                             }
                             label="Mock"
+                            labelPlacement="start"
+                            style={{ marginLeft: 0 }}
                         />
                     </AddDialogContent>
                     <AddDialogActions>
@@ -688,7 +725,7 @@ class Home extends Component {
                                 for (let i = 0; i < this.state.selected.length; i++) {
                                     const [path, method] = this.state.selected[i];
                                     try {
-                                        const response = await fetch('http://127.0.0.1:8083/update_api_config', {
+                                        const response = await fetch(`${this.state.host}:${this.state.port}/update_api_config`, {
                                             method: 'DELETE',
                                             headers: { 'Content-Type': 'application/json' },
                                             body: JSON.stringify({ path, method }),
@@ -740,6 +777,102 @@ class Home extends Component {
                         </Button>
                     </DialogActions>
                 </Dialog>
+                <Dialog
+                    open={this.state.fileDialogOpen}
+                    onClose={() => this.setState({ fileDialogOpen: false, fileError: null })}
+                    maxWidth="sm"
+                    fullWidth={true}
+                    PaperProps={{ style: { borderRadius: 8, minWidth: 400, background: '#fff' } }}
+                >
+                    <DialogTitle>API File</DialogTitle>
+                    <DialogContent dividers>
+                        {this.state.fileLoading ? (
+                            <Typography>Loading...</Typography>
+                        ) : this.state.fileError ? (
+                            <Typography color="error">{this.state.fileError}</Typography>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                <TextField
+                                    label="File Name"
+                                    value={this.state.fileName || ''}
+                                    variant="outlined"
+                                    fullWidth
+                                    InputProps={{ readOnly: true }}
+                                    style={{ marginBottom: 12 }}
+                                />
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                                        <FormControlLabel
+                                            control={<Radio checked={this.state.fileEditMode === 'content'} onChange={() => this.setState({ fileEditMode: 'content' })} />}
+                                            label="Content Update"
+                                            style={{ marginRight: 8 }}
+                                        />
+                                    </div>
+                                    <Button size="small" onClick={() => this.setState({ fileCollapsed: !this.state.fileCollapsed })} startIcon={this.state.fileCollapsed ? <ExpandMoreIcon /> : <ExpandLessIcon /> }>
+                                        {this.state.fileCollapsed ? 'Expand' : 'Collapse'}
+                                    </Button>
+                                </div>
+                                <TextField
+                                    value={this.state.fileContent || ''}
+                                    variant="outlined"
+                                    fullWidth
+                                    multiline
+                                    minRows={this.state.fileCollapsed ? 1 : 8}
+                                    maxRows={this.state.fileCollapsed ? 1 : 32}
+                                    onChange={(e) => this.setState({ fileContent: e.target.value })}
+                                    disabled={this.state.fileEditMode !== 'content'}
+                                />
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }}>
+                                    <FormControlLabel
+                                        control={<Radio checked={this.state.fileEditMode === 'file'} onChange={() => this.setState({ fileEditMode: 'file' })} />}
+                                        label="File Update"
+                                        style={{ marginRight: 8 }}
+                                    />
+                                </div>
+                                <input
+                                    id="file-upload-input"
+                                    type="file"
+                                    style={{ display: 'none' }}
+                                    onChange={(e) => {
+                                        const file = e.target.files && e.target.files[0];
+                                        if (!file) {
+                                            this.setState({ selectedFile: null, selectedFileName: '' });
+                                            return;
+                                        }
+                                        const expected = this.state.fileName || '';
+                                        if (file.name !== expected) {
+                                            window.alert(`Please select the correct file: ${expected}`);
+                                            this.setState({ selectedFile: null, selectedFileName: '' });
+                                            e.target.value = '';
+                                            return;
+                                        }
+                                        this.setState({ selectedFile: file, selectedFileName: file.name });
+                                    }}
+                                    disabled={this.state.fileEditMode !== 'file'}
+                                />
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', maxWidth: '100%' }}>
+                                    <label htmlFor="file-upload-input">
+                                        <Button variant="outlined" color="primary" component="span" size="small" disabled={this.state.fileEditMode !== 'file'}>Choose File</Button>
+                                    </label>
+                                    <Tooltip title={this.state.selectedFileName || ''} placement="top" arrow>
+                                        <Typography
+                                            variant="body2"
+                                            style={{ color: 'rgba(0,0,0,0.6)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}
+                                        >
+                                            {this.state.selectedFileName ? `Selected: ${this.state.selectedFileName}` : 'No file selected'}
+                                        </Typography>
+                                    </Tooltip>
+                                </div>
+                            </div>
+                        )}
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={async () => await this.handleUpdateFile()} color="primary" variant="contained" disabled={this.state.fileLoading || !this.state.fileName || (this.state.fileEditMode === 'file' && !this.state.selectedFile)}>
+                            Update
+                        </Button>
+                        <Button onClick={() => this.setState({ fileDialogOpen: false, fileError: null })}>Close</Button>
+                    </DialogActions>
+                </Dialog>
             </Fragment>
         )
     }
@@ -775,6 +908,94 @@ class Home extends Component {
 
     openConfig(item) {
         this.apiConfigDialog.openConfig(item);
+    }
+
+    openFileInfo = async (api, method) => {
+        this.setState({
+            fileDialogOpen: true,
+            fileLoading: true,
+            fileError: null,
+            currentFileInfo: { api, method, filePath: '', fileName: '' },
+            fileName: '',
+            fileContent: ''
+        });
+        try {
+            const url = `${this.state.host}:${this.state.port}/update_api_config?path=${encodeURIComponent(api)}&method=${encodeURIComponent(method)}`;
+            const response = await fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json' } });
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(errText || 'Request failed');
+            }
+            const data = await response.json();
+            let payload = data && data.content !== undefined ? data.content : data;
+            try {
+                if (typeof payload === 'string') payload = JSON.parse(payload);
+            } catch (e) {
+                // ignore parse failure, will fallback to empty object
+            }
+            const methodKey = (method || '').toUpperCase();
+            const methodObj = payload && payload[methodKey] ? payload[methodKey] : {};
+            const name = methodObj && methodObj.origin ? methodObj.origin : '';
+            let contentText = JSON.stringify(methodObj || {}, null, 2);
+            if (name) {
+                try {
+                    const rawApi = api || '';
+                    const fileUrl = `${this.state.host}:${this.state.port}${rawApi}`;
+                    const contentType = (methodObj && methodObj.content_type) ? methodObj.content_type : 'application/json';
+                    const fileResp = await fetch(fileUrl, { method: 'GET', headers: { 'Content-Type': contentType } });
+                    if (fileResp.ok) {
+                        const fileData = await fileResp.text();
+                        contentText = fileData;
+                    }
+                } catch (err) {
+                    // ignore and keep fallback contentText
+                }
+            }
+            this.setState({
+                fileLoading: false,
+                fileName: name,
+                fileContent: contentText,
+                fileContentType: methodObj && methodObj.content_type ? methodObj.content_type : 'application/json'
+            });
+        } catch (e) {
+            this.setState({ fileLoading: false, fileError: e.message || String(e) });
+        }
+    }
+
+    handleUpdateFile = async () => {
+        try {
+            const { fileName, fileContent, fileContentType, selectedFile, fileEditMode } = this.state;
+            if (!fileName) {
+                window.alert('File Name is empty');
+                return;
+            }
+            let file;
+            if (fileEditMode === 'file') {
+                if (!selectedFile) {
+                    window.alert('Please choose a file to upload');
+                    return;
+                }
+                file = selectedFile;
+            } else {
+                const blob = new Blob([fileContent ?? ''], { type: fileContentType || 'text/plain' });
+                file = new File([blob], fileName, { type: fileContentType || 'text/plain' });
+            }
+            const formData = new FormData();
+            formData.append('file', file, file.name || fileName);
+            const resp = await fetch(`${this.state.host}:${this.state.port}/update_api_file`, {
+                method: 'POST',
+                body: formData
+            });
+            if (!resp.ok) {
+                const errText = await resp.text();
+                window.alert('Update failed: ' + (errText || resp.statusText));
+                return;
+            }
+            this.setState({ fileDialogOpen: false, selectedFile: null, selectedFileName: '' });
+            window.alert('Update success');
+        } catch (e) {
+            window.alert('Update failed: ' + (e?.message || String(e)));
+        }
     }
 
     logout() {
@@ -880,7 +1101,7 @@ class Home extends Component {
         self.setState({ apisLoading: true });
         if (self.state.debug) {
             try {
-                const response = await fetch('http://127.0.0.1:8083/update_api_config', {
+                const response = await fetch(`${this.state.host}:${this.state.port}/update_api_config`, {
                     method: 'GET',
                     headers: { 'Content-Type': 'application/json' }
                 });
@@ -937,7 +1158,7 @@ class Home extends Component {
             origin: newApiUrl
         };
         try {
-            const response = await fetch('http://127.0.0.1:8083/update_api_config', {
+            const response = await fetch(`${this.state.host}:${this.state.port}/update_api_config`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
