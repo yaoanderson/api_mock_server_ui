@@ -291,6 +291,7 @@ class Home extends Component {
             selectedFile: null,
             selectedFileName: '',
             fileEditMode: 'content',
+            contentEditable: true,
         }
     }
 
@@ -803,7 +804,7 @@ class Home extends Component {
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                     <div style={{ display: 'flex', alignItems: 'center' }}>
                                         <FormControlLabel
-                                            control={<Radio checked={this.state.fileEditMode === 'content'} onChange={() => this.setState({ fileEditMode: 'content' })} />}
+                                            control={<Radio checked={this.state.fileEditMode === 'content'} onChange={() => this.state.contentEditable && this.setState({ fileEditMode: 'content' })} />}
                                             label="Content Update"
                                             style={{ marginRight: 8 }}
                                         />
@@ -820,7 +821,7 @@ class Home extends Component {
                                     minRows={this.state.fileCollapsed ? 1 : 8}
                                     maxRows={this.state.fileCollapsed ? 1 : 32}
                                     onChange={(e) => this.setState({ fileContent: e.target.value })}
-                                    disabled={this.state.fileEditMode !== 'content'}
+                                    disabled={this.state.fileEditMode !== 'content' || !this.state.contentEditable}
                                 />
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }}>
                                     <FormControlLabel
@@ -951,11 +952,16 @@ class Home extends Component {
                     // ignore and keep fallback contentText
                 }
             }
+            const contentTypeFinal = methodObj && methodObj.content_type ? methodObj.content_type : 'application/json';
+            const lowerName = (name || '').toLowerCase();
+            const isEditable = (!!contentTypeFinal && (contentTypeFinal.startsWith('text/') || contentTypeFinal === 'application/json' || contentTypeFinal === 'text/css' || contentTypeFinal === 'application/javascript')) || lowerName.endsWith('.ps1');
             this.setState({
                 fileLoading: false,
                 fileName: name,
                 fileContent: contentText,
-                fileContentType: methodObj && methodObj.content_type ? methodObj.content_type : 'application/json'
+                fileContentType: contentTypeFinal,
+                contentEditable: isEditable,
+                fileEditMode: isEditable ? 'content' : 'file'
             });
         } catch (e) {
             this.setState({ fileLoading: false, fileError: e.message || String(e) });
