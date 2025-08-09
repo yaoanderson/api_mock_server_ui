@@ -783,6 +783,7 @@ class Home extends Component {
                     onClose={this.closeFileDialog}
                     maxWidth="sm"
                     fullWidth={true}
+                    disableRestoreFocus
                     PaperProps={{ style: { borderRadius: 8, minWidth: 400, background: '#fff' } }}
                 >
                     <DialogTitle>API File</DialogTitle>
