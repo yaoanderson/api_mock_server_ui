@@ -780,7 +780,7 @@ class Home extends Component {
                 </Dialog>
                 <Dialog
                     open={this.state.fileDialogOpen}
-                    onClose={() => this.setState({ fileDialogOpen: false, fileError: null })}
+                    onClose={this.closeFileDialog}
                     maxWidth="sm"
                     fullWidth={true}
                     PaperProps={{ style: { borderRadius: 8, minWidth: 400, background: '#fff' } }}
@@ -871,7 +871,7 @@ class Home extends Component {
                         <Button onClick={async () => await this.handleUpdateFile()} color="primary" variant="contained" disabled={this.state.fileLoading || !this.state.fileName || (this.state.fileEditMode === 'file' && !this.state.selectedFile)}>
                             Update
                         </Button>
-                        <Button onClick={() => this.setState({ fileDialogOpen: false, fileError: null })}>Close</Button>
+                        <Button onClick={this.closeFileDialog}>Close</Button>
                     </DialogActions>
                 </Dialog>
             </Fragment>
@@ -968,6 +968,23 @@ class Home extends Component {
         }
     }
 
+    closeFileDialog = () => {
+        this.setState({
+            fileDialogOpen: false,
+            fileLoading: false,
+            fileError: null,
+            currentFileInfo: { api: '', method: '', filePath: '', fileName: '' },
+            fileName: '',
+            fileContent: '',
+            fileContentType: 'application/json',
+            selectedFile: null,
+            selectedFileName: '',
+            fileEditMode: 'content',
+            contentEditable: true,
+            fileCollapsed: true,
+        });
+    }
+
     handleUpdateFile = async () => {
         try {
             const { fileName, fileContent, fileContentType, selectedFile, fileEditMode } = this.state;
@@ -997,7 +1014,7 @@ class Home extends Component {
                 window.alert('Update failed: ' + (errText || resp.statusText));
                 return;
             }
-            this.setState({ fileDialogOpen: false, selectedFile: null, selectedFileName: '' });
+            this.closeFileDialog();
             window.alert('Update success');
         } catch (e) {
             window.alert('Update failed: ' + (e?.message || String(e)));
