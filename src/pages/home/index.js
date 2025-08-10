@@ -331,7 +331,9 @@ class Home extends Component {
       };
     
       handleChangePage = (event, newPage) => {
-        this.setState({ page: newPage });
+        const maxPage = Math.max(0, Math.ceil((this.state.filterApis || []).length / this.state.rowsPerPage) - 1);
+        const validPage = Math.min(newPage, maxPage);
+        this.setState({ page: validPage });
       };
     
       handleChangeRowsPerPage = (event) => {
@@ -364,9 +366,13 @@ class Home extends Component {
         const { order, orderBy, selected, page, rowsPerPage } = this.state;
         var rows = this.state.filterApis || [];
 
+        // Ensure page is within valid range
+        const maxPage = Math.max(0, Math.ceil(rows.length / rowsPerPage) - 1);
+        const validPage = Math.min(page, maxPage);
+
         const visibleRows = [...rows]
             .sort(getComparator(order, orderBy))
-            .slice(page * rowsPerPage, (page + 1) * rowsPerPage);
+            .slice(validPage * rowsPerPage, (validPage + 1) * rowsPerPage);
 
         const emptyRows = Math.max(0, rowsPerPage - visibleRows.length);
 
@@ -574,7 +580,7 @@ class Home extends Component {
                         component="div"
                         count={rows.length}
                         rowsPerPage={rowsPerPage}
-                        page={page}
+                        page={validPage}
                         onPageChange={this.handleChangePage}
                         onRowsPerPageChange={this.handleChangeRowsPerPage}
                         />
