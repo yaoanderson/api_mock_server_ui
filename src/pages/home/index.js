@@ -130,6 +130,18 @@ function descendingComparator(a, b, orderBy) {
       label: 'METHOD',
     },
     {
+      id: 'parms',
+      numeric: false,
+      disablePadding: false,
+      label: 'PARMS',
+    },
+    {
+      id: 'body',
+      numeric: false,
+      disablePadding: false,
+      label: 'BODY',
+    },
+    {
       id: 'mock',
       numeric: true,
       disablePadding: false,
@@ -248,7 +260,6 @@ const AddDialogActions = withStyles((theme) => ({
 class Home extends Component {
     constructor(props) {
         super(props);
-        // 优先从localStorage恢复token
         const token = props.token || localStorage.getItem('token') || '';
         this.state = {
             debug: this.props.debug ?? false,
@@ -257,13 +268,13 @@ class Home extends Component {
             progressIsDisplay: 'none',
             backdrop: false,
             apis: {},
-            api_methods: [],
+            api_method_parms_bodys: [],
             filterApis: [],
             tab: 0,
             api_all_enabled: false,
             token,
             refresh_token: props.refresh_token,
-            host: localStorage.getItem('host') || 'http://127.0.0.1',
+            host: localStorage.getItem('host') || 'http://10.109.17.254',
             port: localStorage.getItem('port') || '8083',
             order: 'asc',
             orderBy: 'api',
@@ -278,7 +289,8 @@ class Home extends Component {
             newApiMockEnabled: true,
             newApiParms: '',
             newApiContentType: '',
-            newApiSpeed: 60, // 新增Transfer Rate字段，默认60
+            newApiSpeed: 60,
+            newApiCode: 200,
             deleteConfirmDialogOpen: false,
             fileDialogOpen: false,
             fileLoading: false,
@@ -293,6 +305,9 @@ class Home extends Component {
             fileEditMode: 'content',
             contentEditable: true,
         }
+
+        this.cachedMinRows = this.state.fileCollapsed ? 1 : 8;
+        this.cachedMaxRows = this.state.fileCollapsed ? 1 : 32;
     }
 
     handleRequestSort = (event, property) => {
@@ -353,7 +368,7 @@ class Home extends Component {
         if (savedSelected) {
             this.setState({ selected: JSON.parse(savedSelected) });
         }
-        if (this.props.isLogin && (this.state.debug || this.state.token)) {
+        if (this.props.isLogin) {
             this.updateProgress(100);
             this.callGetApis();
         }
@@ -380,13 +395,16 @@ class Home extends Component {
           return <div>Loading...</div>;
         }
         if (this.state.error) {
-          return <div>加载失败: {this.state.error}</div>;
+          return <div>Loading Failed: {this.state.error}</div>;
         }
+
+        const minRows = this.cachedMinRows;
+        const maxRows = this.cachedMaxRows;
 
         return (
             <Fragment>
                 {this.state.redirect && <Redirect to="/login" /> }
-                <div className="mock-server-home">
+                <div className="mock-solution-home">
                     <AppBar position="static">
                         <Paper className="tabs">
                             <Tabs value={this.state.tab} onChange={(event, value) => this.setState({tab: value})} indicatorColor="primary" textColor="primary" centered >
@@ -397,13 +415,13 @@ class Home extends Component {
                         <Button color = "default" id = "logout-button" style = {{ width: 100, position: 'absolute', height: 48, right: 10 }}
                                     onClick = {() => this.logout()} > Logout </Button>
                     </AppBar>
-                    <TabPanel value={this.state.tab} index={0} style={{width: 1000, margin: '0 auto'}} >
-                        <div style={{ display: 'flex', alignItems: 'center', width: 1000, margin: '0 auto' }}>
+                    <TabPanel value={this.state.tab} index={0} style={{width: 1100, margin: '0 auto'}} >
+                        <div style={{ display: 'flex', alignItems: 'center', width: 1100, margin: '0 auto' }}>
                             <Autocomplete
                                 multiple
                                 id="apis_selector"
-                                options={this.state.api_methods}
-                                getOptionLabel={(option) => `${option[0]} ${option[1]}`}
+                                options={this.state.api_method_parms_bodys}
+                                getOptionLabel={(option) => `${option[0]} ${option[1]} ${option[2]} ${option[3]}`}
                                 defaultValue={[]}
                                 renderInput={(params) => (
                                     <TextField
@@ -423,7 +441,9 @@ class Home extends Component {
                                                     const api_method = api_item.split(" ");
                                                     const new_api = api_method[0];
                                                     const new_method = api_method[1];
-                                                    filterApis = filterApis.concat(this.state.api_methods.filter((api, method) => api === new_api && method === new_method))
+                                                    const new_parm = api_method[2];
+                                                    const new_body = api_method[3];
+                                                    filterApis = filterApis.concat(this.state.api_method_parms_bodys.filter((api, method, parms, body) => api === new_api && method === new_method && parms === new_parm && body === new_body))
                                                 }
                                                 this.setFilterApis(filterApis)
                                             }
@@ -434,7 +454,7 @@ class Home extends Component {
                                 value={this.state.filterApis}
                                 style={{ margin: 10, width: 980 }}
                                 getOptionSelected={(option, value) =>
-                                    option[0] === value[0] && option[1] === value[1]
+                                    option[0] === value[0] && option[1] === value[1] && option[2] === value[2] && option[3] === value[3]
                                 }
                             />
                             {this.state.selected.length > 0 && (
@@ -475,9 +495,13 @@ class Home extends Component {
                                 {visibleRows.map((row, index) => {
                                     const api = row[0];
                                     const method = row[1];
+                                    const parms = row[2];
+                                    const body = row[3];
                                     const apiObj = this.state.apis[api];
                                     const methodObj = apiObj ? apiObj[method] : undefined;
-                                    if (!apiObj || !methodObj) return null;
+                                    const parmsObj = methodObj ? methodObj[parms] : undefined;
+                                    const bodyObj = parmsObj ? parmsObj[body] : undefined;
+                                    if (!apiObj || !methodObj || !parmsObj || !bodyObj) return null;
 
                                     const isItemSelected = selected.includes(row);
                                     const labelId = `enhanced-table-checkbox-${index}`;
@@ -507,10 +531,13 @@ class Home extends Component {
                                         id={labelId}
                                         scope="row"
                                         padding="none"
+                                        style={{maxWidth: "200px", overflow: "auto"}}
                                         >
                                             {api}
                                         </TableCell>
                                         <TableCell align="center">{method}</TableCell>
+                                        <TableCell align="left" style={{maxWidth: "200px", overflow: "auto"}}>{parms}</TableCell>
+                                        <TableCell align="left" style={{maxWidth: "200px", overflow: "auto"}}>{body}</TableCell>
                                         <TableCell align="center">
                                             <Switch
                                                 color="primary"
@@ -525,6 +552,8 @@ class Home extends Component {
                                                             body: JSON.stringify({
                                                                 path: api,
                                                                 method: method,
+                                                                parms: parms,
+                                                                body: body,
                                                                 enabled: +checked
                                                             })
                                                         });
@@ -535,8 +564,8 @@ class Home extends Component {
                                                         else {
                                                             self.setState(prevState => {
                                                                 const newApis = { ...prevState.apis };
-                                                                if (newApis[api] && newApis[api][method]) {
-                                                                    newApis[api][method].enabled = +checked;
+                                                                if (newApis[api] && newApis[api][method] && newApis[api][method][parms] && newApis[api][method][parms][body]) {
+                                                                    newApis[api][method][parms][body].enabled = +checked;
                                                                 }
                                                                 return { apis: newApis };
                                                             });
@@ -545,19 +574,19 @@ class Home extends Component {
                                                         window.alert('update failed: ' + err.message);
                                                     }
                                                 }}
-                                                checked={!!this.state.apis[api][method].enabled}
+                                                checked={!!this.state.apis[api][method][parms][body].enabled}
                                             />
                                         </TableCell>
                                         <TableCell align="center">
                                             <SettingsIcon 
                                                 style={{ cursor: 'pointer', color: 'rgba(0, 0, 0, 0.54)' }} 
-                                                onClick={(e) => { e.stopPropagation(); this.openConfig(`${api} ${method}`); }} 
+                                                onClick={(e) => { e.stopPropagation(); this.openConfig(`${api} ${method} ${parms} ${body}`); }} 
                                             />
                                         </TableCell>
                                         <TableCell align="center">
                                             <DescriptionIcon
                                                 style={{ cursor: 'pointer', color: 'rgba(0, 0, 0, 0.54)' }}
-                                                onClick={(e) => { e.stopPropagation(); this.openFileInfo(api, method); }}
+                                                onClick={(e) => { e.stopPropagation(); this.openFileInfo(api, method, parms, body); }}
                                             />
                                         </TableCell>
                                     </TableRow>
@@ -569,7 +598,7 @@ class Home extends Component {
                                         height: (53) * emptyRows,
                                     }}
                                     >
-                                    <TableCell colSpan={6} />
+                                    <TableCell colSpan={12} />
                                     </TableRow>
                                 )}
                                 </TableBody>
@@ -645,6 +674,13 @@ class Home extends Component {
                             fullWidth
                             margin="normal"
                         />
+                        <TextField
+                            label="Body"
+                            value={this.state.newApiBody}
+                            onChange={e => this.setState({ newApiBody: e.target.value })}
+                            fullWidth
+                            margin="normal"
+                        />
                         <FormControl fullWidth margin="normal">
                             <InputLabel>Content Type</InputLabel>
                             <Select
@@ -686,6 +722,13 @@ class Home extends Component {
                                 style={{ width: '100%' }}
                             />
                         </div>
+                        <TextField
+                            label="Code"
+                            value={this.state.newApiCode}
+                            onChange={e => this.setState({ newApiCode: e.target.value })}
+                            fullWidth
+                            margin="normal"
+                        />
                         <FormControlLabel
                             control={
                                 <Switch
@@ -756,20 +799,26 @@ class Home extends Component {
                                         failed = true;
                                     }
                                 }
-                                let api_methods = [];
-                                Object.entries(apis).forEach(([api, value]) => {
-                                    Object.keys(value).forEach(method => {
-                                        api_methods.push([api, method]);
+                                let api_method_parms_bodys = [];
+                                Object.entries(apis).forEach(([api, avalue]) => {
+                                    Object.entries(avalue).forEach(([method, mvalue]) => {
+                                        Object.entries(mvalue).forEach(([parms, pvalue]) => {
+                                            if (parms != "api_mock_solution_filter_out_rule"){
+                                                Object.keys(pvalue).forEach(body => {
+                                                    api_method_parms_bodys.push([api, method, parms, body]);
+                                                });
+                                            }
+                                        });
                                     });
                                 });
-                                const validApiMethodsSet = new Set(api_methods.map(item => JSON.stringify(item)));
+                                const validApiMethodsSet = new Set(api_method_parms_bodys.map(item => JSON.stringify(item)));
                                 filterApis = filterApis.filter(item => validApiMethodsSet.has(JSON.stringify(item)));
 
                                 localStorage.setItem('filterApis', JSON.stringify(filterApis));
                                 localStorage.setItem('selected', JSON.stringify(selected));
                                 this.setState({
                                     apis,
-                                    api_methods,
+                                    api_method_parms_bodys,
                                     filterApis,
                                     selected,
                                     deleteConfirmDialogOpen: false
@@ -802,9 +851,9 @@ class Home extends Component {
                                 <TextField
                                     label="File Name"
                                     value={this.state.fileName || ''}
+                                    onChange={(e) => this.setState({ fileName: e.target.value })}
                                     variant="outlined"
                                     fullWidth
-                                    InputProps={{ readOnly: true }}
                                     style={{ marginBottom: 12 }}
                                 />
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -815,7 +864,11 @@ class Home extends Component {
                                             style={{ marginRight: 8 }}
                                         />
                                     </div>
-                                    <Button size="small" onClick={() => this.setState({ fileCollapsed: !this.state.fileCollapsed })} startIcon={this.state.fileCollapsed ? <ExpandMoreIcon /> : <ExpandLessIcon /> }>
+                                    <Button size="small" onClick={() => {
+                                        this.setState({ fileCollapsed: !this.state.fileCollapsed });
+                                        this.cachedMinRows = !this.state.fileCollapsed ? 1 : 8;
+                                        this.cachedMaxRows = !this.state.fileCollapsed ? 1 : 32;
+                                    }} startIcon={this.state.fileCollapsed ? <ExpandMoreIcon /> : <ExpandLessIcon /> }>
                                         {this.state.fileCollapsed ? 'Expand' : 'Collapse'}
                                     </Button>
                                 </div>
@@ -824,8 +877,8 @@ class Home extends Component {
                                     variant="outlined"
                                     fullWidth
                                     multiline
-                                    minRows={this.state.fileCollapsed ? 1 : 8}
-                                    maxRows={this.state.fileCollapsed ? 1 : 32}
+                                    minRows={minRows}
+                                    maxRows={maxRows}
                                     onChange={(e) => this.setState({ fileContent: e.target.value })}
                                     disabled={this.state.fileEditMode !== 'content' || !this.state.contentEditable}
                                 />
@@ -917,38 +970,38 @@ class Home extends Component {
         this.apiConfigDialog.openConfig(item);
     }
 
-    openFileInfo = async (api, method) => {
+    openFileInfo = async (api, method, parms, body) => {
         this.setState({
             fileDialogOpen: true,
             fileLoading: true,
             fileError: null,
-            currentFileInfo: { api, method, filePath: '', fileName: '' },
+            currentFileInfo: { api, method, parms, body, filePath: '', fileName: '' },
             fileName: '',
             fileContent: ''
         });
         try {
-            const url = `${this.state.host}:${this.state.port}/update_api_config?path=${encodeURIComponent(api)}&method=${encodeURIComponent(method)}`;
+            const url = `${this.state.host}:${this.state.port}/update_api_config?path=${encodeURIComponent(api)}&method=${encodeURIComponent(method)}&parms=${encodeURIComponent(parms)}&body=${encodeURIComponent(body)}`;
             const response = await fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json' } });
             if (!response.ok) {
                 const errText = await response.text();
                 throw new Error(errText || 'Request failed');
             }
             const data = await response.json();
+
             let payload = data && data.content !== undefined ? data.content : data;
             try {
                 if (typeof payload === 'string') payload = JSON.parse(payload);
             } catch (e) {
                 // ignore parse failure, will fallback to empty object
             }
-            const methodKey = (method || '').toUpperCase();
-            const methodObj = payload && payload[methodKey] ? payload[methodKey] : {};
-            const name = methodObj && methodObj.origin ? methodObj.origin : '';
-            let contentText = JSON.stringify(methodObj || {}, null, 2);
+
+            const name = payload && payload.origin ? payload.origin : '';
+            let contentText = JSON.stringify(payload || {}, null, 2);
             if (name) {
                 try {
                     const rawApi = api || '';
                     const fileUrl = `${this.state.host}:${this.state.port}${rawApi}`;
-                    const contentType = (methodObj && methodObj.content_type) ? methodObj.content_type : 'application/json';
+                    const contentType = (payload && payload.content_type) ? payload.content_type : 'application/json';
                     const fileResp = await fetch(fileUrl, { method: 'GET', headers: { 'Content-Type': contentType } });
                     if (fileResp.ok) {
                         const fileData = await fileResp.text();
@@ -958,7 +1011,7 @@ class Home extends Component {
                     // ignore and keep fallback contentText
                 }
             }
-            const contentTypeFinal = methodObj && methodObj.content_type ? methodObj.content_type : 'application/json';
+            const contentTypeFinal = payload && payload.content_type ? payload.content_type : 'application/json';
             const lowerName = (name || '').toLowerCase();
             const isEditable = (!!contentTypeFinal && (contentTypeFinal.startsWith('text/') || contentTypeFinal === 'application/json' || contentTypeFinal === 'text/css' || contentTypeFinal === 'application/javascript')) || lowerName.endsWith('.ps1');
             this.setState({
@@ -1111,7 +1164,7 @@ class Home extends Component {
     async callGetApis()  {
         const self = this;
         self.setState({ apisLoading: true });
-        if (self.state.debug) {
+        if (!self.state.debug) {
             try {
                 const response = await fetch(`${this.state.host}:${this.state.port}/update_api_config`, {
                     method: 'GET',
@@ -1122,15 +1175,21 @@ class Home extends Component {
                 }
                 var jsonData = await response.json();
                 jsonData = JSON.parse(jsonData["content"])
-                let api_methods = []
-                Object.entries(jsonData).forEach(([api, value]) => {
-                    Object.keys(value).forEach(method => {
-                        api_methods.push([api, method])
+                let api_method_parms_bodys = []
+                Object.entries(jsonData).forEach(([api, avalue]) => {
+                    Object.entries(avalue).forEach(([method, mvalue]) => {
+                        Object.entries(mvalue).forEach(([parms, pvalue]) => {
+                            if (parms != "api_mock_solution_filter_out_rule"){
+                                Object.keys(pvalue).forEach(body => {
+                                    api_method_parms_bodys.push([api, method, parms, body])
+                                });
+                            }
+                        });
                     });
                 });
                 self.setState({
                     apis: jsonData,
-                    api_methods: api_methods,
+                    api_method_parms_bodys: api_method_parms_bodys,
                     apisLoading: false
                 });
             } catch (err) {
@@ -1139,9 +1198,38 @@ class Home extends Component {
             }
         }
         else {
+            jsonData = {
+                "/xxx/yyy/v2/download": {
+                    "GET": {
+                        "deviceId=zzzz": {
+                            "default": {
+                                "parms": "deviceId=zzzz",
+                                "body": "default",
+                                "origin": "download.json",
+                                "content_type": "application/json",
+                                "speed": 20,
+                                "enabled": 1,
+                                "code": 404
+                            }
+                        }
+                    }
+                }
+            }
+            let api_method_parms_bodys = []
+            Object.entries(jsonData).forEach(([api, avalue]) => {
+                Object.entries(avalue).forEach(([method, mvalue]) => {
+                    Object.entries(mvalue).forEach(([parms, pvalue]) => {
+                        if (parms != "api_mock_solution_filter_out_rule"){
+                            Object.keys(pvalue).forEach(body => {
+                                api_method_parms_bodys.push([api, method, parms, body])
+                            });
+                        }
+                    });
+                });
+            });
             self.setState({
-                apis: {},
-                api_methods: [],
+                apis: jsonData,
+                api_method_parms_bodys: api_method_parms_bodys,
                 apisLoading: false
             });
         }
@@ -1161,12 +1249,14 @@ class Home extends Component {
     };
 
     handleAddApiSubmit = async () => {
-        const { newApiUrl, newApiMethod, newApiMockEnabled, newApiParms, newApiContentType, newApiSpeed } = this.state;
+        const { newApiUrl, newApiMethod, newApiMockEnabled, newApiParms, newApiBody, newApiContentType, newApiSpeed, newApiCode } = this.state;
         const apiConfig = {
             enabled: newApiMockEnabled,
             parms: newApiParms,
+            body: newApiBody,
             content_type: newApiContentType,
             speed: newApiSpeed,
+            code: newApiCode,
             origin: newApiUrl
         };
         try {
@@ -1177,22 +1267,27 @@ class Home extends Component {
                     path: newApiUrl,
                     method: newApiMethod,
                     parms: newApiParms,
+                    body: newApiBody,
                     content_type: newApiContentType,
                     enabled: +newApiMockEnabled,
-                    speed: newApiSpeed
+                    speed: newApiSpeed,
+                    code: newApiCode
                 }),
             });
             if (response.ok) {
                 this.setState(prevState => {
                     const newApis = { ...prevState.apis };
                     if (!newApis[newApiUrl]) newApis[newApiUrl] = {};
-                    newApis[newApiUrl][newApiMethod] = apiConfig;
+                    if (!newApis[newApiUrl][newApiMethod]) newApis[newApiUrl][newApiMethod] = {};
+                    if (!newApis[newApiUrl][newApiMethod][newApiParms]) newApis[newApiUrl][newApiMethod][newApiParms] = {};
+                    if (!newApis[newApiUrl][newApiMethod][newApiParms][newApiBody]) newApis[newApiUrl][newApiMethod][newApiParms][newApiBody] = {};
+                    newApis[newApiUrl][newApiMethod][newApiParms][newApiBody] = apiConfig;
                     const newFilterApis = Array.isArray(prevState.filterApis) ? [...prevState.filterApis] : [];
-                    const api_methods = this.state.api_methods;
-                    const newApiMethodItem = api_methods.find(
-                        item => item[0] === newApiUrl && item[1] === newApiMethod
+                    const api_method_parms_bodys = this.state.api_method_parms_bodys;
+                    const newApiMethodItem = api_method_parms_bodys.find(
+                        item => item[0] === newApiUrl && item[1] === newApiMethod && item[2] === newApiParms && item[3] === newApiBody
                     );
-                    if (newApiMethodItem && !newFilterApis.some(item => item[0] === newApiUrl && item[1] === newApiMethod)) {
+                    if (newApiMethodItem && !newFilterApis.some(item => item[0] === newApiUrl && item[1] === newApiMethod && item[2] === newApiParms && item[3] === newApiBody)) {
                         newFilterApis.push(newApiMethodItem);
                     }
                     localStorage.setItem('filterApis', JSON.stringify(newFilterApis));
@@ -1204,8 +1299,10 @@ class Home extends Component {
                         newApiMethod: 'GET',
                         newApiMockEnabled: true,
                         newApiParms: '',
+                        newApiBody: '',
                         newApiContentType: '',
                         newApiSpeed: 60,
+                        newApiCode: 200
                     };
                 });
                 window.alert('API added successfully!');

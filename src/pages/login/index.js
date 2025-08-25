@@ -20,7 +20,7 @@ class Login extends Component {
     constructor(props) {
         super(props);
         this.state = {
-            debug: true,
+            debug: false,
             environment: "sit",
             username: "",
             password: "",
@@ -101,7 +101,7 @@ class Login extends Component {
             })
         }
         
-        if ((this.state.debug && domain && this.state.username) || (token !== undefined && token !== null)) {
+        if ((this.state.debug || (domain && this.state.username)) || (token !== undefined && token !== null)) {
             this.props.sendLogin(domain, token, refresh_token, this.state.username, this.state.debug);
             this.props.history.push('/home');
         }

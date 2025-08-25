@@ -74,7 +74,7 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/t
 
 ### Only for QA tool project
 
-Anderson: Currently there is still one legacy design issue or potential security issue which will impact the first user in batch assign mode when set company value or set data realm value, and this issue will be considered and optimized in the next release.
+Anderson: Currently there is still one legacy design issue or potential security issue which will impact the different users to config own mock api, and this issue will be considered and optimized in the next release.
 
 ### End
 
