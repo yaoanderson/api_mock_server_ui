@@ -274,7 +274,7 @@ class Home extends Component {
             api_all_enabled: false,
             token,
             refresh_token: props.refresh_token,
-            host: localStorage.getItem('host') || 'http://10.109.17.254',
+            host: localStorage.getItem('host') || 'http://127.0.0.1',
             port: localStorage.getItem('port') || '8083',
             order: 'asc',
             orderBy: 'api',
