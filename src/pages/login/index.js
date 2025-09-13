@@ -13,7 +13,6 @@ import Alert from '@material-ui/lab/Alert';
 import Collapse from '@material-ui/core/Collapse';
 import Select from '@material-ui/core/Select';
 import MenuItem from '@material-ui/core/MenuItem';
-import axios from 'axios'
 import './login.css'
 
 class Login extends Component {
@@ -31,9 +30,9 @@ class Login extends Component {
     
     render() {
         return (
-            <div className="mock-server-login" >
+            <div className="mock-solution-login" >
                 {this.state.alert && <Collapse in={this.state.open} ><Alert severity="error" onClose={() => this.setState({open: false})} >{this.state.alert}</Alert></Collapse> }
-                <h1>API Mock Server UI</h1>
+                <h1>API Mock Solution UI</h1>
                 <form className="login-form" noValidate autoComplete="off" style={{ margin: 30 }}>
                     <Grid
                         container
@@ -85,21 +84,21 @@ class Login extends Component {
             domain = "sit-api";
         }
 
-        if (!this.state.debug) {
-            await axios.post(`https://${domain}.com:443/rbac-api/v1/authentication`, {
-                "client_id": "rbac-service",
-                "grant_type": "password",
-                "username": this.state.username,
-                "password": this.state.password
-            })
-            .then(function (response) {
-                token = response.data.access_token;
-                refresh_token = response.data.refresh_token;
-            })
-            .catch(function (error) {
-                console.error(error);
-            })
-        }
+        // if (!this.state.debug) {
+        //     await axios.post(`https://${domain}.com:443/rbac-api/v1/authentication`, {
+        //         "client_id": "rbac-service",
+        //         "grant_type": "password",
+        //         "username": this.state.username,
+        //         "password": this.state.password
+        //     })
+        //     .then(function (response) {
+        //         token = response.data.access_token;
+        //         refresh_token = response.data.refresh_token;
+        //     })
+        //     .catch(function (error) {
+        //         console.error(error);
+        //     })
+        // }
         
         if ((this.state.debug || (domain && this.state.username)) || (token !== undefined && token !== null)) {
             this.props.sendLogin(domain, token, refresh_token, this.state.username, this.state.debug);

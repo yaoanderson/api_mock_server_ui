@@ -118,9 +118,15 @@ function descendingComparator(a, b, orderBy) {
   
   const headCells = [
     {
-      id: 'api',
+      id: 'client_ip',
       numeric: false,
       disablePadding: true,
+      label: 'CLIENT IP',
+    },
+    {
+      id: 'api',
+      numeric: false,
+      disablePadding: false,
       label: 'API',
     },
     {
@@ -185,7 +191,7 @@ function descendingComparator(a, b, orderBy) {
           {headCells.map((headCell) => (
             <TableCell
               key={headCell.id}
-              align={headCell.id === 'api'? 'left': 'center'}
+              align={headCell.id === 'client_ip'? 'left': 'center'}
               padding={headCell.disablePadding ? 'none' : 'normal'}
               sortDirection={orderBy === headCell.id ? order : false}
               style={{paddingRight: "0px", backgroundColor: "rgba(211, 211, 211, 0.42)", borderBottom: "1px solid rgb(204, 204, 204)", color: "rgba(0, 0, 0, 0.54)"}}
@@ -274,28 +280,30 @@ class Home extends Component {
             api_all_enabled: false,
             token,
             refresh_token: props.refresh_token,
-            host: localStorage.getItem('host') || 'http://127.0.0.1',
-            port: localStorage.getItem('port') || '8083',
+            host: localStorage.getItem('host') || 'https://127.0.0.1',
+            port: localStorage.getItem('port') || '443',
             order: 'asc',
-            orderBy: 'api',
+            orderBy: 'client_ip',
             selected: [],
             page: 0,
             rowsPerPage: 5,
             apisLoading: false,
             error: null,
             addApiDialogOpen: false,
+            newApiClientIp: '',
             newApiUrl: '',
             newApiMethod: 'GET',
             newApiMockEnabled: true,
             newApiParms: '',
             newApiContentType: '',
+            newApiOrigin: '',
             newApiSpeed: 60,
             newApiCode: 200,
             deleteConfirmDialogOpen: false,
             fileDialogOpen: false,
             fileLoading: false,
             fileError: null,
-            currentFileInfo: { api: '', method: '', filePath: '', fileName: '' },
+            currentFileInfo: { client_ip: '', api: '', method: '', filePath: '', fileName: '' },
             fileName: '',
             fileContent: '',
             fileContentType: 'application/json',
@@ -415,8 +423,8 @@ class Home extends Component {
                         <Button color = "default" id = "logout-button" style = {{ width: 100, position: 'absolute', height: 48, right: 10 }}
                                     onClick = {() => this.logout()} > Logout </Button>
                     </AppBar>
-                    <TabPanel value={this.state.tab} index={0} style={{width: 1100, margin: '0 auto'}} >
-                        <div style={{ display: 'flex', alignItems: 'center', width: 1100, margin: '0 auto' }}>
+                    <TabPanel value={this.state.tab} index={0} style={{width: 1200, margin: '0 auto'}} >
+                        <div style={{ display: 'flex', alignItems: 'center', width: 1200, margin: '0 auto' }}>
                             <Autocomplete
                                 multiple
                                 id="apis_selector"
@@ -438,12 +446,13 @@ class Home extends Component {
                                                 let filterApis = []
                                                 while (newApiList.length > 0) {
                                                     const api_item = newApiList.pop();
-                                                    const api_method = api_item.split(" ");
-                                                    const new_api = api_method[0];
-                                                    const new_method = api_method[1];
-                                                    const new_parm = api_method[2];
-                                                    const new_body = api_method[3];
-                                                    filterApis = filterApis.concat(this.state.api_method_parms_bodys.filter((api, method, parms, body) => api === new_api && method === new_method && parms === new_parm && body === new_body))
+                                                    const api_items = api_item.split(" ");
+                                                    const api_client_ip = api_items[0];
+                                                    const new_api = api_items[1];
+                                                    const new_method = api_items[2];
+                                                    const new_parm = api_items[3];
+                                                    const new_body = api_items[4];
+                                                    filterApis = filterApis.concat(this.state.api_method_parms_bodys.filter((client_ip, api, method, parms, body) => client_ip === api_client_ip && api === new_api && method === new_method && parms === new_parm && body === new_body))
                                                 }
                                                 this.setFilterApis(filterApis)
                                             }
@@ -493,15 +502,17 @@ class Home extends Component {
                                 />
                                 <TableBody>
                                 {visibleRows.map((row, index) => {
-                                    const api = row[0];
-                                    const method = row[1];
-                                    const parms = row[2];
-                                    const body = row[3];
-                                    const apiObj = this.state.apis[api];
+                                    const client_ip = row[0];
+                                    const api = row[1];
+                                    const method = row[2];
+                                    const parms = row[3];
+                                    const body = row[4];
+                                    const clientIpObj = this.state.apis[client_ip];
+                                    const apiObj = clientIpObj ? clientIpObj[api] : undefined;
                                     const methodObj = apiObj ? apiObj[method] : undefined;
                                     const parmsObj = methodObj ? methodObj[parms] : undefined;
                                     const bodyObj = parmsObj ? parmsObj[body] : undefined;
-                                    if (!apiObj || !methodObj || !parmsObj || !bodyObj) return null;
+                                    if (!clientIpObj || !apiObj || !methodObj || !parmsObj || !bodyObj) return null;
 
                                     const isItemSelected = selected.includes(row);
                                     const labelId = `enhanced-table-checkbox-${index}`;
@@ -533,8 +544,9 @@ class Home extends Component {
                                         padding="none"
                                         style={{maxWidth: "200px", overflow: "auto"}}
                                         >
-                                            {api}
+                                            {client_ip}
                                         </TableCell>
+                                        <TableCell align="center">{api}</TableCell>
                                         <TableCell align="center">{method}</TableCell>
                                         <TableCell align="left" style={{maxWidth: "200px", overflow: "auto"}}>{parms}</TableCell>
                                         <TableCell align="left" style={{maxWidth: "200px", overflow: "auto"}}>{body}</TableCell>
@@ -550,6 +562,7 @@ class Home extends Component {
                                                             method: 'PUT',
                                                             headers: { 'Content-Type': 'application/json' },
                                                             body: JSON.stringify({
+                                                                client_ip: client_ip,
                                                                 path: api,
                                                                 method: method,
                                                                 parms: parms,
@@ -563,30 +576,30 @@ class Home extends Component {
                                                         }
                                                         else {
                                                             self.setState(prevState => {
-                                                                const newApis = { ...prevState.apis };
-                                                                if (newApis[api] && newApis[api][method] && newApis[api][method][parms] && newApis[api][method][parms][body]) {
-                                                                    newApis[api][method][parms][body].enabled = +checked;
+                                                                const newItem = { ...prevState.apis };
+                                                                if (newItem[client_ip] && newItem[client_ip][api] && newItem[client_ip][api][method] && newItem[client_ip][api][method][parms] && newItem[client_ip][api][method][parms][body]) {
+                                                                    newItem[client_ip][api][method][parms][body].enabled = +checked;
                                                                 }
-                                                                return { apis: newApis };
+                                                                return { apis: newItem };
                                                             });
                                                         }
                                                     } catch (err) {
                                                         window.alert('update failed: ' + err.message);
                                                     }
                                                 }}
-                                                checked={!!this.state.apis[api][method][parms][body].enabled}
+                                                checked={!!this.state.apis[client_ip][api][method][parms][body].enabled}
                                             />
                                         </TableCell>
                                         <TableCell align="center">
                                             <SettingsIcon 
                                                 style={{ cursor: 'pointer', color: 'rgba(0, 0, 0, 0.54)' }} 
-                                                onClick={(e) => { e.stopPropagation(); this.openConfig(`${api} ${method} ${parms} ${body}`); }} 
+                                                onClick={(e) => { e.stopPropagation(); this.openConfig(`${client_ip} ${api} ${method} ${parms} ${body}`); }} 
                                             />
                                         </TableCell>
                                         <TableCell align="center">
                                             <DescriptionIcon
                                                 style={{ cursor: 'pointer', color: 'rgba(0, 0, 0, 0.54)' }}
-                                                onClick={(e) => { e.stopPropagation(); this.openFileInfo(api, method, parms, body); }}
+                                                onClick={(e) => { e.stopPropagation(); this.openFileInfo(client_ip, api, method, parms, body); }}
                                             />
                                         </TableCell>
                                     </TableRow>
@@ -647,6 +660,13 @@ class Home extends Component {
                         Add New API
                     </AddDialogTitle>
                     <AddDialogContent dividers>
+                        <TextField
+                            label="Client IP"
+                            value={this.state.newApiClientIp}
+                            onChange={e => this.setState({ newApiClientIp: e.target.value })}
+                            fullWidth
+                            margin="normal"
+                        />
                         <TextField
                             label="API Url"
                             value={this.state.newApiUrl}
@@ -773,12 +793,12 @@ class Home extends Component {
                                 let apis = { ...this.state.apis };
                                 let failed = false;
                                 for (let i = 0; i < this.state.selected.length; i++) {
-                                    const [path, method] = this.state.selected[i];
+                                    const [client_ip, path, method, parms, body] = this.state.selected[i];
                                     try {
                                         const response = await fetch(`${this.state.host}:${this.state.port}/update_api_config`, {
                                             method: 'DELETE',
                                             headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ path, method }),
+                                            body: JSON.stringify({ client_ip, path, method, body }),
                                         });
                                         if (!response.ok) {
                                             const errText = await response.text();
@@ -786,12 +806,12 @@ class Home extends Component {
                                             failed = true;
                                             continue;
                                         }
-                                        selected = selected.filter(item => !(item[0] === path && item[1] === method));
-                                        filterApis = filterApis.filter(item => !(item[0] === path && item[1] === method));
-                                        if (apis[path] && apis[path][method]) {
-                                            delete apis[path][method];
-                                            if (Object.keys(apis[path]).length === 0) {
-                                                delete apis[path];
+                                        selected = selected.filter(item => !(item[0] === client_ip && item[1] === path && item[2] === method && item[3] === parms && item[4] === body));
+                                        filterApis = filterApis.filter(item => !(item[0] === client_ip && item[1] === path && item[2] === method && item[3] === parms && item[4] === body));
+                                        if (apis[client_ip] && apis[client_ip][path] && apis[client_ip][path][method] && apis[client_ip][path][method][parms] && apis[client_ip][path][method][parms][body]) {
+                                            delete apis[client_ip][path][method][parms][body];
+                                            if (Object.keys(apis[client_ip]).length === 0) {
+                                                delete apis[client_ip];
                                             }
                                         }
                                     } catch (err) {
@@ -800,14 +820,18 @@ class Home extends Component {
                                     }
                                 }
                                 let api_method_parms_bodys = [];
-                                Object.entries(apis).forEach(([api, avalue]) => {
-                                    Object.entries(avalue).forEach(([method, mvalue]) => {
-                                        Object.entries(mvalue).forEach(([parms, pvalue]) => {
-                                            if (parms != "api_mock_solution_filter_out_rule"){
-                                                Object.keys(pvalue).forEach(body => {
-                                                    api_method_parms_bodys.push([api, method, parms, body]);
-                                                });
-                                            }
+                                Object.entries(apis).forEach(([client_ip, cvalue]) => {
+                                    Object.entries(cvalue).forEach(([api, avalue]) => {
+                                        Object.entries(avalue).forEach(([method, mvalue]) => {
+                                            Object.entries(mvalue).forEach(([parms, pvalue]) => {
+                                                if (parms !== "api_mock_solution_filter_out_rule"){
+                                                    Object.keys(pvalue).forEach(body => {
+                                                        if (body !== "api_mock_solution_body_filter_out_rule"){
+                                                            api_method_parms_bodys.push([client_ip, api, method, parms, body]);
+                                                        }
+                                                    });
+                                                }
+                                            });
                                         });
                                     });
                                 });
@@ -970,17 +994,17 @@ class Home extends Component {
         this.apiConfigDialog.openConfig(item);
     }
 
-    openFileInfo = async (api, method, parms, body) => {
+    openFileInfo = async (client_ip, api, method, parms, body) => {
         this.setState({
             fileDialogOpen: true,
             fileLoading: true,
             fileError: null,
-            currentFileInfo: { api, method, parms, body, filePath: '', fileName: '' },
+            currentFileInfo: { client_ip, api, method, parms, body, filePath: '', fileName: '' },
             fileName: '',
             fileContent: ''
         });
         try {
-            const url = `${this.state.host}:${this.state.port}/update_api_config?path=${encodeURIComponent(api)}&method=${encodeURIComponent(method)}&parms=${encodeURIComponent(parms)}&body=${encodeURIComponent(body)}`;
+            const url = `${this.state.host}:${this.state.port}/update_api_config?client_ip=${encodeURIComponent(client_ip)}&path=${encodeURIComponent(api)}&method=${encodeURIComponent(method)}&parms=${encodeURIComponent(parms)}&body=${encodeURIComponent(body)}`;
             const response = await fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json' } });
             if (!response.ok) {
                 const errText = await response.text();
@@ -1000,10 +1024,20 @@ class Home extends Component {
             if (name) {
                 try {
                     const rawApi = api || '';
-                    const fileUrl = `${this.state.host}:${this.state.port}${rawApi}`;
+                    var fileUrl = `${this.state.host}:${this.state.port}${rawApi}`;
                     const contentType = (payload && payload.content_type) ? payload.content_type : 'application/json';
-                    const fileResp = await fetch(fileUrl, { method: 'GET', headers: { 'Content-Type': contentType } });
-                    if (fileResp.ok) {
+                    var fileResp = '';
+                    if (parms) {
+                        fileUrl = fileUrl + "?" + parms
+                    }
+                    if (method === "GET") {
+                        fileResp = await fetch(fileUrl, { method: method, headers: { 'Content-Type': contentType } });    
+                    }
+                    else if (method === "POST") {
+                        fileResp = await fetch(fileUrl, { method: method, headers: { 'Content-Type': contentType }, body: body });    
+                    }
+                    
+                    if (fileResp && fileResp.ok) {
                         const fileData = await fileResp.text();
                         contentText = fileData;
                     }
@@ -1070,21 +1104,6 @@ class Home extends Component {
         })
     }
 
-    async setStatus(index, status) {
-        const self = this;
-        for (var i=0; i<self.state.filterApis.length; i++) {
-            if (index !== null && index !== i) {
-                continue;
-            }
-            let id = self.state.filterApis[i];
-            const api = id[0];
-            const method = id[1];
-            if (!!self.state.apis[api][method].enabled !== status) {
-                self.callUpdateApi(api, method, status);
-            }
-        }
-    }
-
     setFilterApis(value) {
         this.setState({ filterApis: value }, () => {
             localStorage.setItem('filterApis', JSON.stringify(this.state.filterApis));
@@ -1095,7 +1114,7 @@ class Home extends Component {
         let count = 0;
         for (var j=0; j<this.state.filterApis.length; j++) {
             const api_method = this.state.filterApis[j].split(" ");
-            if (this.state[api_method[0]][api_method[1]].enabled === true) {
+            if (this.state[api_method[0]][api_method[1]][api_method[2]][api_method[3]][api_method[4]].enabled === true) {
                 count += 1;
             }
         }
@@ -1129,38 +1148,6 @@ class Home extends Component {
         })
     }
 
-    async callUpdateApi(api, method, status)  {
-        const self = this;
-        await axios.put(`https://${self.props.domain}.com:443/rbac-api/v1/apis/${api}/${method}`, 
-            {
-                status: status
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${self.state.token}`
-                }
-            }
-        )
-        .then(function (response) {
-            self.state[api][method].enabled = status;
-            self.setState({
-                filterApis: self.state.filterApis
-            }, () => {
-                self.setState({
-                    api_all_enabled: self.checkApiAllEnabled()
-                })
-            })
-        })
-        .catch(function (error) {
-            console.error(error);
-            if (error.response.statusText === "Unauthorized") {
-                self.refreshToken(() => {
-                    self.callUpdateApi(api, method, status);
-                });
-            }
-        })
-    }
-
     async callGetApis()  {
         const self = this;
         self.setState({ apisLoading: true });
@@ -1176,14 +1163,18 @@ class Home extends Component {
                 var jsonData = await response.json();
                 jsonData = JSON.parse(jsonData["content"])
                 let api_method_parms_bodys = []
-                Object.entries(jsonData).forEach(([api, avalue]) => {
-                    Object.entries(avalue).forEach(([method, mvalue]) => {
-                        Object.entries(mvalue).forEach(([parms, pvalue]) => {
-                            if (parms != "api_mock_solution_filter_out_rule"){
-                                Object.keys(pvalue).forEach(body => {
-                                    api_method_parms_bodys.push([api, method, parms, body])
-                                });
-                            }
+                Object.entries(jsonData).forEach(([client_ip, cvalue]) => {
+                    Object.entries(cvalue).forEach(([api, avalue]) => {
+                        Object.entries(avalue).forEach(([method, mvalue]) => {
+                            Object.entries(mvalue).forEach(([parms, pvalue]) => {
+                                if (parms !== "api_mock_solution_filter_out_rule"){
+                                    Object.keys(pvalue).forEach(body => {
+                                        if (body !== "api_mock_solution_body_filter_out_rule"){
+                                            api_method_parms_bodys.push([client_ip, api, method, parms, body])
+                                        }
+                                    });
+                                }
+                            });
                         });
                     });
                 });
@@ -1199,31 +1190,37 @@ class Home extends Component {
         }
         else {
             jsonData = {
-                "/xxx/yyy/v2/download": {
-                    "GET": {
-                        "deviceId=zzzz": {
-                            "default": {
-                                "parms": "deviceId=zzzz",
-                                "body": "default",
-                                "origin": "download.json",
-                                "content_type": "application/json",
-                                "speed": 20,
-                                "enabled": 1,
-                                "code": 404
+                "1.0.0.127": {
+                    "/xxx/yyy/v2/download": {
+                        "GET": {
+                            "deviceId=zzzz": {
+                                "default": {
+                                    "parms": "deviceId=zzzz",
+                                    "body": "default",
+                                    "origin": "download.json",
+                                    "content_type": "application/json",
+                                    "speed": 20,
+                                    "enabled": 1,
+                                    "code": 404
+                                }
                             }
                         }
                     }
                 }
             }
             let api_method_parms_bodys = []
-            Object.entries(jsonData).forEach(([api, avalue]) => {
-                Object.entries(avalue).forEach(([method, mvalue]) => {
-                    Object.entries(mvalue).forEach(([parms, pvalue]) => {
-                        if (parms != "api_mock_solution_filter_out_rule"){
-                            Object.keys(pvalue).forEach(body => {
-                                api_method_parms_bodys.push([api, method, parms, body])
-                            });
-                        }
+            Object.entries(jsonData).forEach(([client_ip, cvalue]) => {
+                Object.entries(cvalue).forEach(([api, avalue]) => {
+                    Object.entries(avalue).forEach(([method, mvalue]) => {
+                        Object.entries(mvalue).forEach(([parms, pvalue]) => {
+                            if (parms !== "api_mock_solution_filter_out_rule"){
+                                Object.keys(pvalue).forEach(body => {
+                                    if (body !== "api_mock_solution_body_filter_out_rule"){
+                                        api_method_parms_bodys.push([client_ip, api, method, parms, body])
+                                    }
+                                });
+                            }
+                        });
                     });
                 });
             });
@@ -1235,12 +1232,12 @@ class Home extends Component {
         }
     }
 
-    handleApiConfigSave = (api, method, config) => {
+    handleApiConfigSave = (client_ip, api, method, parms, body, config) => {
         this.setState(prevState => {
             const apis = { ...prevState.apis };
-            if (apis[api] && apis[api][method]) {
-                apis[api][method] = {
-                    ...apis[api][method],
+            if (apis[client_ip] && apis[client_ip][api] && apis[client_ip][api][method] && apis[client_ip][api][method][parms] && apis[client_ip][api][method][parms][body]) {
+                apis[client_ip][api][method][parms][body] = {
+                    ...apis[client_ip][api][method][parms][body],
                     ...config
                 };
             }
@@ -1249,25 +1246,27 @@ class Home extends Component {
     };
 
     handleAddApiSubmit = async () => {
-        const { newApiUrl, newApiMethod, newApiMockEnabled, newApiParms, newApiBody, newApiContentType, newApiSpeed, newApiCode } = this.state;
+        const { newApiClientIp, newApiUrl, newApiMethod, newApiMockEnabled, newApiParms, newApiBody, newApiOrigin, newApiContentType, newApiSpeed, newApiCode } = this.state;
         const apiConfig = {
             enabled: newApiMockEnabled,
             parms: newApiParms,
             body: newApiBody,
+            origin: newApiOrigin,
             content_type: newApiContentType,
             speed: newApiSpeed,
-            code: newApiCode,
-            origin: newApiUrl
+            code: newApiCode
         };
         try {
             const response = await fetch(`${this.state.host}:${this.state.port}/update_api_config`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    client_ip: newApiClientIp,
                     path: newApiUrl,
                     method: newApiMethod,
                     parms: newApiParms,
                     body: newApiBody,
+                    origin: newApiOrigin,
                     content_type: newApiContentType,
                     enabled: +newApiMockEnabled,
                     speed: newApiSpeed,
@@ -1277,17 +1276,17 @@ class Home extends Component {
             if (response.ok) {
                 this.setState(prevState => {
                     const newApis = { ...prevState.apis };
-                    if (!newApis[newApiUrl]) newApis[newApiUrl] = {};
-                    if (!newApis[newApiUrl][newApiMethod]) newApis[newApiUrl][newApiMethod] = {};
-                    if (!newApis[newApiUrl][newApiMethod][newApiParms]) newApis[newApiUrl][newApiMethod][newApiParms] = {};
-                    if (!newApis[newApiUrl][newApiMethod][newApiParms][newApiBody]) newApis[newApiUrl][newApiMethod][newApiParms][newApiBody] = {};
-                    newApis[newApiUrl][newApiMethod][newApiParms][newApiBody] = apiConfig;
+                    if (!newApis[newApiClientIp][newApiUrl]) newApis[newApiUrl] = {};
+                    if (!newApis[newApiClientIp][newApiUrl][newApiMethod]) newApis[newApiClientIp][newApiUrl][newApiMethod] = {};
+                    if (!newApis[newApiClientIp][newApiUrl][newApiMethod][newApiParms]) newApis[newApiClientIp][newApiUrl][newApiMethod][newApiParms] = {};
+                    if (!newApis[newApiClientIp][newApiUrl][newApiMethod][newApiParms][newApiBody]) newApis[newApiClientIp][newApiUrl][newApiMethod][newApiParms][newApiBody] = {};
+                    newApis[newApiClientIp][newApiUrl][newApiMethod][newApiParms][newApiBody] = apiConfig;
                     const newFilterApis = Array.isArray(prevState.filterApis) ? [...prevState.filterApis] : [];
                     const api_method_parms_bodys = this.state.api_method_parms_bodys;
                     const newApiMethodItem = api_method_parms_bodys.find(
-                        item => item[0] === newApiUrl && item[1] === newApiMethod && item[2] === newApiParms && item[3] === newApiBody
+                        item => item[0] === newApiClientIp && item[1] === newApiUrl && item[2] === newApiMethod && item[3] === newApiParms && item[4] === newApiBody
                     );
-                    if (newApiMethodItem && !newFilterApis.some(item => item[0] === newApiUrl && item[1] === newApiMethod && item[2] === newApiParms && item[3] === newApiBody)) {
+                    if (newApiMethodItem && !newFilterApis.some(item => item[0] === newApiClientIp && item[1] === newApiUrl && item[2] === newApiMethod && item[3] === newApiParms && item[4] === newApiBody)) {
                         newFilterApis.push(newApiMethodItem);
                     }
                     localStorage.setItem('filterApis', JSON.stringify(newFilterApis));
@@ -1295,11 +1294,13 @@ class Home extends Component {
                         apis: newApis,
                         filterApis: newFilterApis,
                         addApiDialogOpen: false,
+                        newApiClientIp: '',
                         newApiUrl: '',
                         newApiMethod: 'GET',
                         newApiMockEnabled: true,
                         newApiParms: '',
                         newApiBody: '',
+                        newOrigin: '',
                         newApiContentType: '',
                         newApiSpeed: 60,
                         newApiCode: 200

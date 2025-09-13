@@ -72,24 +72,6 @@ class ApiConfigDialog extends Component {
     }
 
     handleConfigModeChange = (mode) => {
-        if (mode === 'basic') {
-            let jsonObj;
-            try {
-                jsonObj = JSON.parse(this.state.api_config);
-            } catch {
-                jsonObj = null;
-            }
-            // if (jsonObj && jsonObj.b !== undefined) {
-            //     this.setState(prevState => ({
-            //         configMode: mode,
-            //         selectedApi: {
-            //             ...prevState.selectedApi,
-            //             b: jsonObj.b
-            //         }
-            //     }));
-            //     return;
-            // }
-        }
         this.setState({ configMode: mode });
     }
 
@@ -150,6 +132,22 @@ class ApiConfigDialog extends Component {
                                             variant="outlined"
                                             fullWidth
                                             onChange={(event) => this.setFieldValue("body", event.target.value)}
+                                            InputProps={{
+                                                readOnly: false,
+                                                disabled: configMode !== 'basic'
+                                            }}
+                                            style={{ marginLeft: 0 }}
+                                        />
+                                    </Grid>
+                                    {/* Origin */}
+                                    <Grid item style={{ marginLeft: 0 }}>
+                                        <TextField
+                                            label="File Name"
+                                            value={this.state.selectedApi.origin || ''}
+                                            placeholder="Enter File Name"
+                                            variant="outlined"
+                                            fullWidth
+                                            onChange={(event) => this.setFieldValue("origin", event.target.value)}
                                             InputProps={{
                                                 readOnly: false,
                                                 disabled: configMode !== 'basic'
@@ -291,18 +289,21 @@ class ApiConfigDialog extends Component {
 
     openConfig(item) {
         const api_method_parms_body = item.split(" ");
-        const filterApi = this.props.apis[api_method_parms_body[0]][api_method_parms_body[1]][api_method_parms_body[2]][api_method_parms_body[3]];
+        const filterApi = this.props.apis[api_method_parms_body[0]][api_method_parms_body[1]][api_method_parms_body[2]][api_method_parms_body[3]][api_method_parms_body[4]];
         const selectedApi = {
-            path: api_method_parms_body[0],
-            method: api_method_parms_body[1],
-            parms: api_method_parms_body[2],
-            body: api_method_parms_body[3],
+            client_ip: api_method_parms_body[0],
+            path: api_method_parms_body[1],
+            method: api_method_parms_body[2],
+            parms: api_method_parms_body[3],
+            body: api_method_parms_body[4],
+            origin: filterApi.origin,
             enabled: filterApi.enabled,
             content_type: filterApi.content_type || '',
             speed: filterApi.speed !== undefined ? filterApi.speed : 60,
             code: filterApi.code
         };
         var api_config = {...selectedApi};
+        delete api_config.client_ip;
         delete api_config.path;
         delete api_config.method;
         delete api_config.parms;
@@ -323,7 +324,7 @@ class ApiConfigDialog extends Component {
 
     setFieldValue(key, value) {
         const selectedApi = { ...this.state.selectedApi };
-        if (key === 'parms' || key === 'body' || key === 'content_type' || key === 'speed' || key === 'enabled' || key === 'code') {
+        if (key === 'parms' || key === 'body' || key === 'content_type' || key === 'speed' || key === 'enabled' || key === 'code' || key === 'origin') {
             selectedApi[key] = key === 'speed' ? Number(value) : value;
             selectedApi[key] = key === 'code' ? Number(value) : value;
             if (key === 'enabled') {
@@ -371,12 +372,14 @@ class ApiConfigDialog extends Component {
 
     async submitConfig() {
         try {
-            const { path, method, parms, body, content_type, enabled, speed, code } = this.state.selectedApi;
+            const { client_ip, path, method, parms, body, origin, content_type, enabled, speed, code } = this.state.selectedApi;
             const request_body = JSON.stringify({
+                client_ip,
                 path,
                 method,
                 parms,
                 body,
+                origin,
                 content_type,
                 enabled: +enabled,
                 speed,
@@ -387,11 +390,11 @@ class ApiConfigDialog extends Component {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                request_body
+                body: request_body
             });
             if (response.ok) {
                 if (typeof this.props.onConfigSave === 'function') {
-                    this.props.onConfigSave(path, method, parms, body, { enabled, parms, body, content_type, speed, code });
+                    this.props.onConfigSave(client_ip, path, method, parms, body, { enabled, parms, body, origin, content_type, speed, code });
                 }
                 window.alert('submit success');
                 this.setState({
