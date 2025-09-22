@@ -15,3 +15,15 @@
 #historyRoles .MuiButtonBase-root .MuiListItemText-root > span {
     width: 50%;
 }
+.fileListCell {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.apiListCell {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}

@@ -30,7 +30,7 @@ import TableSortLabel from '@material-ui/core/TableSortLabel';
 import Checkbox from '@material-ui/core/Checkbox';
 import { visuallyHidden } from '@material-ui/utils';
 
-import './home.css'
+import './home.css';
 import { logoutAction } from '../../common/action'
 import ApiConfigDialog from '../../components/apiConfigDialog'
 import Dialog from '@material-ui/core/Dialog';
@@ -289,6 +289,10 @@ class Home extends Component {
             rowsPerPage: 5,
             apisLoading: false,
             error: null,
+            staticFileList: [],
+            addStaticApiDialogOpen: false,
+            selectedStaticFile: null,
+            selectedStaticFileName: '',
             addApiDialogOpen: false,
             newApiClientIp: '',
             newApiUrl: '',
@@ -303,6 +307,8 @@ class Home extends Component {
             fileDialogOpen: false,
             fileLoading: false,
             fileError: null,
+            staticFileLoading: false,
+            staticFileError: null,
             currentFileInfo: { client_ip: '', api: '', method: '', filePath: '', fileName: '' },
             fileName: '',
             fileContent: '',
@@ -380,6 +386,10 @@ class Home extends Component {
             this.updateProgress(100);
             this.callGetApis();
         }
+    }
+
+    createData(id, fileName, fileLink) {
+        return { id, fileName, fileLink };
     }
 
     render() {
@@ -476,6 +486,31 @@ class Home extends Component {
                                     Delete
                                 </Button>
                             )}
+                            {this.state.selected.length === 1 && (
+                                <Button
+                                    variant="contained"
+                                    color="default"
+                                    style={{ marginLeft: 16, height: 40, textTransform: 'none' }}
+                                    onClick={() => {
+                                        const [client_ip, path, method, parms, body] = this.state.selected[0];
+                                        const ob = this.state.apis[client_ip][path][method][parms][body];
+                                        this.setState({ 
+                                            addApiDialogOpen: true,
+                                            newApiClientIp: '',
+                                            newApiUrl: path,
+                                            newApiMethod: method,
+                                            newApiParms: parms,
+                                            newApiBody: body,
+                                            newApiCode: ob.code,
+                                            newApiContentType: ob.content_type,
+                                            newApiMockEnabled: !!ob.enabled,
+                                            newApiSpeed: ob.speed
+                                        })
+                                    }}
+                                >
+                                    Clone
+                                </Button>
+                            )}
                             <Button
                                 variant="contained"
                                 color="primary"
@@ -483,6 +518,40 @@ class Home extends Component {
                                 onClick={() => this.setState({ addApiDialogOpen: true })}
                             >
                                 Add
+                            </Button>
+                            <Button
+                                variant="contained"
+                                color="inherit"
+                                style={{ marginLeft: 16, height: 40, textTransform: 'none', minWidth: 90, paddingLeft: 0, paddingRight: 0 }}
+                                onClick={async () => {
+                                    this.setState({ addStaticApiDialogOpen: true, staticFileLoading: true })
+                                    try {
+                                        const response = await fetch(`${this.state.host}:${this.state.port}/update_api_assets_file`, {
+                                            method: 'GET',
+                                            headers: { 'Content-Type': 'application/json' }
+                                        });
+                                        if (response.ok) {
+                                            var jsonData = await response.json();
+                                            jsonData = JSON.parse(jsonData["content"])
+                                            let staticFileList = []
+                                            for (let i = 0; i < jsonData.length; i++) {
+                                                let item = jsonData[i];
+                                               staticFileList.push(this.createData(item[0], item[1], item[2]));
+                                            }
+                                            this.setState({
+                                                staticFileList: staticFileList,
+                                                staticFileLoading: false
+                                            });
+                                        } else {
+                                            const errText = await response.text();
+                                            window.alert('Get static file list failed: ' + errText);
+                                        }
+                                    } catch (err) {
+                                        window.alert('Get static file list error: ' + err.message);
+                                    }
+                                }}
+                            >
+                                Add Static
                             </Button>
                         </div>
 
@@ -548,8 +617,12 @@ class Home extends Component {
                                         </TableCell>
                                         <TableCell align="center">{api}</TableCell>
                                         <TableCell align="center">{method}</TableCell>
-                                        <TableCell align="left" style={{maxWidth: "200px", overflow: "auto"}}>{parms}</TableCell>
-                                        <TableCell align="left" style={{maxWidth: "200px", overflow: "auto"}}>{body}</TableCell>
+                                        <Tooltip title={parms}>
+                                            <TableCell align="left" className='apiListCell' >{parms}</TableCell>
+                                        </Tooltip>
+                                        <Tooltip title={body}>
+                                            <TableCell align="left" className='apiListCell' >{body}</TableCell>
+                                        </Tooltip>
                                         <TableCell align="center">
                                             <Switch
                                                 color="primary"
@@ -957,6 +1030,103 @@ class Home extends Component {
                         <Button onClick={() => this.setState({ fileDialogOpen: false, fileError: null })}>Close</Button>
                     </DialogActions>
                 </Dialog>
+                <Dialog
+                    open={this.state.addStaticApiDialogOpen}
+                    onClose={() => this.setState({ addStaticApiDialogOpen: false, fileError: null })}
+                    maxWidth="sm"
+                    fullWidth={true}
+                    PaperProps={{ style: { borderRadius: 8, minWidth: 1000, background: '#fff' } }}
+                >
+                    <DialogTitle>API Static File</DialogTitle>
+                    
+                        {this.state.staticFileLoading ? (
+                            <Typography style={{ marginLeft: 20 }} >Loading...</Typography>
+                        ) : this.state.staticFileError ? (
+                            <Typography color="error">{this.state.staticFileError}</Typography>
+                        ) : (
+                            <DialogContent dividers>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                    <TextField
+                                        label="Static File Name"
+                                        value={this.state.selectedStaticFileName || ''}
+                                        onChange={(e) => this.setState({ selectedStaticFileName: e.target.value })}
+                                        variant="outlined"
+                                        fullWidth
+                                        style={{ marginBottom: 12 }}
+                                    />
+                                    <input
+                                        id="file-upload-input"
+                                        type="file"
+                                        style={{ display: 'none' }}
+                                        onChange={(e) => {
+                                            const file = e.target.files && e.target.files[0];
+                                            if (!file) {
+                                                this.setState({ selectedStaticFile: null, selectedStaticFileName: '' });
+                                                return;
+                                            }
+                                            var selectedStaticFileName;
+                                            if (this.state.selectedStaticFileName) {
+                                                selectedStaticFileName = this.state.selectedStaticFileName;
+                                            }
+                                            else {
+                                                selectedStaticFileName = file.name;
+                                            }
+                                            this.setState({ selectedStaticFile: file, selectedStaticFileName: selectedStaticFileName, staticFileLoading: false });
+                                        }}
+                                        disabled={false}
+                                    />
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', maxWidth: '100%' }}>
+                                        <label htmlFor="file-upload-input">
+                                            <Button variant="outlined" color="primary" component="span" size="small" disabled={false}>Choose File</Button>
+                                        </label>
+                                        <Tooltip title={this.state.selectedStaticFileName || ''} placement="top" arrow>
+                                            <Typography
+                                                variant="body2"
+                                                style={{ color: 'rgba(0,0,0,0.6)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}
+                                            >
+                                                {this.state.selectedStaticFileName ? `Selected: ${this.state.selectedStaticFileName}` : 'No file selected'}
+                                            </Typography>
+                                        </Tooltip>
+                                    </div>
+                                </div>
+                                <TableContainer component={Paper} style={{ marginBottom: 30, marginTop: 30 }}>
+                                    <Typography style={{ color: "grey" }} >Show latest 50 files here:</Typography>
+                                    <Table style={{ tableLayout: 'fixed' }} aria-label="simple table">
+                                        <TableHead>
+                                            <TableRow style={{backgroundColor: "rgba(211, 211, 211, 0.42)", borderBottom: "1px solid rgb(204, 204, 204)"}}>
+                                                <TableCell style={{ width: "40px", maxWidth: "40px", minWidth: "40px" }} >ID</TableCell>
+                                                <TableCell align="left">File Name</TableCell>
+                                                <TableCell align="left">File Path</TableCell>
+                                            </TableRow>
+                                        </TableHead>
+                                        <TableBody>
+                                        {this.state.staticFileList.slice(0, 50).map((row) => (
+                                            <TableRow
+                                            key={row.id}
+                                            >
+                                                <TableCell style={{ width: "40px", maxWidth: "40px", minWidth: "40px" }} >
+                                                    {row.id}
+                                                </TableCell>
+                                                <Tooltip title={row.fileName}>
+                                                    <TableCell align="left" className="fileListCell" >{row.fileName}</TableCell>
+                                                </Tooltip>
+                                                <Tooltip title={row.fileLink}>
+                                                    <TableCell align="left" className="fileListCell" >{row.fileLink}</TableCell>
+                                                </Tooltip>
+                                            </TableRow>
+                                        ))}
+                                        </TableBody>
+                                    </Table>
+                                </TableContainer>
+                            </DialogContent>
+                        )}
+                    <DialogActions>
+                        <Button onClick={async () => await this.handleAddStaticFile()} color="primary" variant="contained" disabled={!this.state.selectedStaticFile}>
+                            Add
+                        </Button>
+                        <Button onClick={() => this.setState({ addStaticApiDialogOpen: false })}>Close</Button>
+                    </DialogActions>
+                </Dialog>
             </Fragment>
         )
     }
@@ -1058,6 +1228,39 @@ class Home extends Component {
             });
         } catch (e) {
             this.setState({ fileLoading: false, fileError: e.message || String(e) });
+        }
+    }
+
+    handleAddStaticFile = async () => {
+        try {
+            const { selectedStaticFileName, selectedStaticFile } = this.state;
+            if (!selectedStaticFileName) {
+                window.alert('File Name is empty');
+                return;
+            }
+
+            if (this.state.staticFileList.some(subArray => subArray.fileName === selectedStaticFileName)) {
+                window.alert('File Name already exists, please rename name.');
+                return;
+            }
+
+            let file = selectedStaticFile;
+            
+            const formData = new FormData();
+            formData.append('file', file, selectedStaticFileName || file.name);
+            const resp = await fetch(`${this.state.host}:${this.state.port}/update_api_assets_file`, {
+                method: 'POST',
+                body: formData
+            });
+            if (!resp.ok) {
+                const errText = await resp.text();
+                window.alert('Update static file failed: ' + (errText || resp.statusText));
+                return;
+            }
+            this.setState({ addStaticApiDialogOpen: false, selectedStaticFile: null, selectedStaticFileName: '' });
+            window.alert('Update static file success');
+        } catch (e) {
+            window.alert('Update static file failed: ' + (e?.message || String(e)));
         }
     }
 
@@ -1256,6 +1459,10 @@ class Home extends Component {
             speed: newApiSpeed,
             code: newApiCode
         };
+        if (newApiClientIp === '') {
+            window.alert('Add failed: Invalid Client IP.');
+            return;
+        }
         try {
             const response = await fetch(`${this.state.host}:${this.state.port}/update_api_config`, {
                 method: 'POST',
@@ -1276,10 +1483,10 @@ class Home extends Component {
             if (response.ok) {
                 this.setState(prevState => {
                     const newApis = { ...prevState.apis };
-                    if (!newApis[newApiClientIp][newApiUrl]) newApis[newApiUrl] = {};
-                    if (!newApis[newApiClientIp][newApiUrl][newApiMethod]) newApis[newApiClientIp][newApiUrl][newApiMethod] = {};
-                    if (!newApis[newApiClientIp][newApiUrl][newApiMethod][newApiParms]) newApis[newApiClientIp][newApiUrl][newApiMethod][newApiParms] = {};
-                    if (!newApis[newApiClientIp][newApiUrl][newApiMethod][newApiParms][newApiBody]) newApis[newApiClientIp][newApiUrl][newApiMethod][newApiParms][newApiBody] = {};
+                    if (newApis[newApiClientIp][newApiUrl] === null) newApis[newApiClientIp][newApiUrl] = {};
+                    if (newApis[newApiClientIp][newApiUrl][newApiMethod] === null) newApis[newApiClientIp][newApiUrl][newApiMethod] = {};
+                    if (newApis[newApiClientIp][newApiUrl][newApiMethod][newApiParms] === null) newApis[newApiClientIp][newApiUrl][newApiMethod][newApiParms] = {};
+                    if (newApis[newApiClientIp][newApiUrl][newApiMethod][newApiParms][newApiBody] === null) newApis[newApiClientIp][newApiUrl][newApiMethod][newApiParms][newApiBody] = {};
                     newApis[newApiClientIp][newApiUrl][newApiMethod][newApiParms][newApiBody] = apiConfig;
                     const newFilterApis = Array.isArray(prevState.filterApis) ? [...prevState.filterApis] : [];
                     const api_method_parms_bodys = this.state.api_method_parms_bodys;
