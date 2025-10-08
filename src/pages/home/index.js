@@ -45,11 +45,13 @@ import CloseIcon from '@material-ui/icons/Close';
 import DialogTitle from '@material-ui/core/DialogTitle';
 import DialogContent from '@material-ui/core/DialogContent';
 import DialogActions from '@material-ui/core/DialogActions';
+import DialogContentText from '@material-ui/core/DialogContentText';
 import Slider from '@material-ui/core/Slider';
 import ExpandMoreIcon from '@material-ui/icons/ExpandMore';
 import ExpandLessIcon from '@material-ui/icons/ExpandLess';
 import Tooltip from '@material-ui/core/Tooltip';
 import Radio from '@material-ui/core/Radio';
+import Chip from '@material-ui/core/Chip';
 
 function CircularProgressWithLabel(props) {
     return (
@@ -278,6 +280,7 @@ class Home extends Component {
             filterApis: [],
             tab: 0,
             api_all_enabled: false,
+            username: "",
             token,
             refresh_token: props.refresh_token,
             host: localStorage.getItem('host') || 'https://127.0.0.1',
@@ -318,10 +321,11 @@ class Home extends Component {
             selectedFileName: '',
             fileEditMode: 'content',
             contentEditable: true,
+            addNewCertFileDialogOpen: false,
+            newCertFileName: "",
+            cachedMinRows: 1,
+            cachedMaxRows: 1
         }
-
-        this.cachedMinRows = this.state.fileCollapsed ? 1 : 8;
-        this.cachedMaxRows = this.state.fileCollapsed ? 1 : 32;
     }
 
     handleRequestSort = (event, property) => {
@@ -332,45 +336,64 @@ class Home extends Component {
         });
       };
     
-      handleSelectAllClick = (event) => {
+    handleSelectAllClick = (event) => {
         if (event.target.checked) {
-          const selected = this.state.filterApis.map((row) => row);
-          this.setState({ selected }, () => {
+            const selected = this.state.filterApis.map((row) => row);
+            this.setState({ selected }, () => {
             localStorage.setItem('selected', JSON.stringify(this.state.selected));
-          });
+            });
         } else {
-          this.setState({ selected: [] }, () => {
+            this.setState({ selected: [] }, () => {
             localStorage.setItem('selected', '[]');
-          });
+            });
         }
-      };
-    
-      handleClick = (event, id) => {
+    };
+
+    handleClick = (event, id) => {
         const { selected } = this.state;
         const selectedIndex = selected.indexOf(id);
         let newSelected = [...selected];
-    
+
         if (selectedIndex === -1) {
-          newSelected.push(id);
+            newSelected.push(id);
         } else {
-          newSelected.splice(selectedIndex, 1);
+            newSelected.splice(selectedIndex, 1);
         }
-    
+
         this.setState({ selected: newSelected });
-      };
-    
-      handleChangePage = (event, newPage) => {
+    };
+
+    handleChangePage = (event, newPage) => {
         const maxPage = Math.max(0, Math.ceil((this.state.filterApis || []).length / this.state.rowsPerPage) - 1);
         const validPage = Math.min(newPage, maxPage);
         this.setState({ page: validPage });
-      };
-    
-      handleChangeRowsPerPage = (event) => {
+    };
+
+    handleChangeRowsPerPage = (event) => {
         this.setState({
-          rowsPerPage: parseInt(event.target.value, 10),
-          page: 0
+            rowsPerPage: parseInt(event.target.value, 10),
+            page: 0
         });
-      };
+    };
+
+    decodeJWT(token) {
+        try {
+            const parts = token.split('.');
+            
+            if (parts.length !== 3) {
+            throw new Error('Invalid JWT token');
+            }
+            
+            const payload = parts[1];
+            
+            const decodedPayload = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+            
+            return JSON.parse(decodedPayload);
+        } catch (error) {
+            console.error('Failed to decode JWT:', error);
+            return null;
+        }
+    }
 
     componentDidMount() {
         localStorage.removeItem('filterApis');
@@ -382,7 +405,20 @@ class Home extends Component {
         if (savedSelected) {
             this.setState({ selected: JSON.parse(savedSelected) });
         }
-        if (this.props.isLogin) {
+
+        const _path = window.location.hash;
+        let _username = "";
+        if (_path.indexOf("?") !== -1) {
+            const token = _path.split("?")[1].split("xtoken=")[1];
+            const decoded = this.decodeJWT(token);
+            _username = decoded.billNumber;
+            this.setState({ 
+                token: token,
+                username: _username 
+            });
+        }
+
+        if (_username || this.props.isLogin) {
             this.updateProgress(100);
             this.callGetApis();
         }
@@ -416,22 +452,20 @@ class Home extends Component {
           return <div>Loading Failed: {this.state.error}</div>;
         }
 
-        const minRows = this.cachedMinRows;
-        const maxRows = this.cachedMaxRows;
-
         return (
             <Fragment>
                 {this.state.redirect && <Redirect to="/login" /> }
                 <div className="mock-solution-home">
-                    <AppBar position="static">
+                    <AppBar position="static" style={{width: "100%", margin: '0 auto'}}>
+                        {this.state.username && <Typography style = {{ width: "auto", position: 'absolute', lineHeight: "48px", height: 48, left: 35, color: "rgba(0, 0, 0, 0.87)", fontFamily: "emoji" }} >Hello <b>{this.state.username}</b></Typography>}
                         <Paper className="tabs">
                             <Tabs value={this.state.tab} onChange={(event, value) => this.setState({tab: value})} indicatorColor="primary" textColor="primary" centered >
                                 <Tab label="API" {...a11yProps(0)} />
                                 <Tab label="Others" {...a11yProps(1)} disabled={true} />
                             </Tabs>
                         </Paper>
-                        <Button color = "default" id = "logout-button" style = {{ width: 100, position: 'absolute', height: 48, right: 10 }}
-                                    onClick = {() => this.logout()} > Logout </Button>
+                        {!this.state.username && <Button color = "default" id = "logout-button" style = {{ width: 100, position: 'absolute', height: 48, right: 10 }}
+                                    onClick = {() => this.logout()} > Logout </Button>}
                     </AppBar>
                     <TabPanel value={this.state.tab} index={0} style={{width: 1200, margin: '0 auto'}} >
                         <div style={{ display: 'flex', alignItems: 'center', width: 1200, margin: '0 auto' }}>
@@ -439,8 +473,15 @@ class Home extends Component {
                                 multiple
                                 id="apis_selector"
                                 options={this.state.api_method_parms_bodys}
-                                getOptionLabel={(option) => `${option[0]} ${option[1]} ${option[2]} ${option[3]}`}
+                                getOptionLabel={(option) => `${option[0]} ${option[1]} ${option[2]} ${option[3]} ${option[4]}`}
                                 defaultValue={[]}
+                                renderOption={(option, { selected }) => (
+                                    <Tooltip title={`${option[0]} ${option[1]} ${option[2]} ${option[3]} ${option[4]}`} placement="top">
+                                        <span style={{ textOverflow: 'ellipsis', whiteSpace: 'nowrap', overflow: 'hidden', display: 'block' }}>
+                                            {`${option[0]} ${option[1]} ${option[2]} ${option[3]} ${option[4]}`}
+                                        </span>
+                                    </Tooltip>
+                                )}
                                 renderInput={(params) => (
                                     <TextField
                                         {...params}
@@ -469,9 +510,33 @@ class Home extends Component {
                                         }}
                                     />
                                 )}
+                                renderTags={(value, getTagProps) => 
+                                    value.map((option, index) => {
+                                    const fullTagText = `${option[0]} ${option[1]} ${option[2]} ${option[3]} ${option[4]}`;
+                                    return (
+                                        <Tooltip 
+                                        key={index}
+                                        title={fullTagText} 
+                                        placement="top"
+                                        arrow
+                                        >
+                                        <Chip
+                                            {...getTagProps({ index })}
+                                            label={fullTagText}
+                                            style={{ 
+                                            textOverflow: 'ellipsis', 
+                                            whiteSpace: 'nowrap', 
+                                            overflow: 'hidden', 
+                                            maxWidth: '150px'
+                                            }}
+                                        />
+                                        </Tooltip>
+                                    );
+                                    })
+                                }
                                 onChange={(event, value) => this.setFilterApis(value)}
                                 value={this.state.filterApis}
-                                style={{ margin: 10, width: 980 }}
+                                style={{ margin: 10, width: 700 }}
                                 getOptionSelected={(option, value) =>
                                     option[0] === value[0] && option[1] === value[1] && option[2] === value[2] && option[3] === value[3]
                                 }
@@ -480,7 +545,7 @@ class Home extends Component {
                                 <Button
                                     variant="contained"
                                     color="secondary"
-                                    style={{ marginLeft: 16, height: 40, textTransform: 'none' }}
+                                    style={{ marginLeft: 10, height: 40, textTransform: 'none' }}
                                     onClick={() => this.setState({ deleteConfirmDialogOpen: true })}
                                 >
                                     Delete
@@ -489,8 +554,7 @@ class Home extends Component {
                             {this.state.selected.length === 1 && (
                                 <Button
                                     variant="contained"
-                                    color="default"
-                                    style={{ marginLeft: 16, height: 40, textTransform: 'none' }}
+                                    style={{ marginLeft: 10, height: 40, textTransform: 'none', backgroundColor: 'rgb(3 195 60)', color: '#fff' }}
                                     onClick={() => {
                                         const [client_ip, path, method, parms, body] = this.state.selected[0];
                                         const ob = this.state.apis[client_ip][path][method][parms][body];
@@ -513,16 +577,15 @@ class Home extends Component {
                             )}
                             <Button
                                 variant="contained"
-                                color="primary"
-                                style={{ marginLeft: 16, height: 40, textTransform: 'none' }}
+                                style={{ width: 140, marginLeft: 10, height: 40, textTransform: 'none', backgroundColor: 'rgb(24 167 229)', color: '#fff' }}
                                 onClick={() => this.setState({ addApiDialogOpen: true })}
                             >
-                                Add
+                                Add Config
                             </Button>
                             <Button
                                 variant="contained"
-                                color="inherit"
-                                style={{ marginLeft: 16, height: 40, textTransform: 'none', minWidth: 90, paddingLeft: 0, paddingRight: 0 }}
+                                color="primary"
+                                style={{ marginLeft: 10, height: 40, textTransform: 'none', minWidth: 90, paddingLeft: 0, paddingRight: 0 }}
                                 onClick={async () => {
                                     this.setState({ addStaticApiDialogOpen: true, staticFileLoading: true })
                                     try {
@@ -551,7 +614,15 @@ class Home extends Component {
                                     }
                                 }}
                             >
-                                Add Static
+                                Add File
+                            </Button>
+                            <Button
+                                variant="contained"
+                                color="inherit"
+                                style={{ marginRight: 10, marginLeft: 10, height: 40, textTransform: 'none', minWidth: 90, paddingLeft: 0, paddingRight: 0 }}
+                                onClick={() => this.setState({ addNewCertFileDialogOpen: true })}
+                            >
+                                New Cert
                             </Button>
                         </div>
 
@@ -962,9 +1033,22 @@ class Home extends Component {
                                         />
                                     </div>
                                     <Button size="small" onClick={() => {
-                                        this.setState({ fileCollapsed: !this.state.fileCollapsed });
-                                        this.cachedMinRows = !this.state.fileCollapsed ? 1 : 8;
-                                        this.cachedMaxRows = !this.state.fileCollapsed ? 1 : 32;
+                                        this.setState({ 
+                                            fileCollapsed: !this.state.fileCollapsed
+                                        }, () => {
+                                            if (this.state.fileCollapsed) {
+                                                this.setState({ 
+                                                    cachedMinRows: 1,
+                                                    cachedMaxRows: 1
+                                                })
+                                            }
+                                            else {
+                                                this.setState({ 
+                                                    cachedMinRows: 8,
+                                                    cachedMaxRows: 32
+                                                })
+                                            }
+                                        });
                                     }} startIcon={this.state.fileCollapsed ? <ExpandMoreIcon /> : <ExpandLessIcon /> }>
                                         {this.state.fileCollapsed ? 'Expand' : 'Collapse'}
                                     </Button>
@@ -974,8 +1058,8 @@ class Home extends Component {
                                     variant="outlined"
                                     fullWidth
                                     multiline
-                                    minRows={minRows}
-                                    maxRows={maxRows}
+                                    minRows={this.state.cachedMinRows}
+                                    maxRows={this.state.cachedMaxRows}
                                     onChange={(e) => this.setState({ fileContent: e.target.value })}
                                     disabled={this.state.fileEditMode !== 'content' || !this.state.contentEditable}
                                 />
@@ -1127,6 +1211,32 @@ class Home extends Component {
                         <Button onClick={() => this.setState({ addStaticApiDialogOpen: false })}>Close</Button>
                     </DialogActions>
                 </Dialog>
+                <Dialog open={this.state.addNewCertFileDialogOpen} onClose={() => this.setState({ addNewCertFileDialogOpen: false, newCertFileName: "" })} aria-labelledby="form-dialog-title">
+                    <DialogTitle id="form-dialog-title">Add New Domain Certification</DialogTitle>
+                    <DialogContent>
+                    <DialogContentText>
+                        Fill the domain name, and click "Generate" button, then you will get downloading certification crt file.
+                    </DialogContentText>
+                    <TextField
+                        autoFocus
+                        margin="dense"
+                        id="domainName"
+                        label="Valid Domain Name"
+                        type="text"
+                        value={this.state.newCertFileName}
+                        onChange={(e) => this.setState({ newCertFileName: e.target.value })}
+                        fullWidth
+                    />
+                    </DialogContent>
+                    <DialogActions>
+                    <Button onClick={() => this.setState({ addNewCertFileDialogOpen: false, newCertFileName: "" })} color="primary">
+                        Cancel
+                    </Button>
+                    <Button onClick={async () => await this.handleAddNewCertFile()} color="primary">
+                        Generate
+                    </Button>
+                    </DialogActions>
+                </Dialog>
             </Fragment>
         )
     }
@@ -1224,7 +1334,10 @@ class Home extends Component {
                 fileContent: contentText,
                 fileContentType: contentTypeFinal,
                 contentEditable: isEditable,
-                fileEditMode: isEditable ? 'content' : 'file'
+                fileEditMode: isEditable ? 'content' : 'file',
+                cachedMinRows: 1,
+                cachedMaxRows: 1,
+                fileCollapsed: true
             });
         } catch (e) {
             this.setState({ fileLoading: false, fileError: e.message || String(e) });
@@ -1264,9 +1377,57 @@ class Home extends Component {
         }
     }
 
+    handleAddNewCertFile = async () => {
+        const domain = this.state.newCertFileName;
+        if (domain === "") {
+            return;
+        }
+
+        try {
+            const response = await fetch(`${this.state.host}:${this.state.port}/update_api_file?domain=${domain}`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            if (response.ok) {
+                var data = await response.text();
+
+                const contentDisposition = response.headers.get('Content-Disposition');
+                let filename = 'certification_file.crt';
+                if (contentDisposition) {
+                    const filenameMatch = contentDisposition.match(/filename=([^;]+)/);
+                    if (filenameMatch.length > 1) {
+                        filename = filenameMatch[1];
+                    }
+                }
+                
+                const blob = new Blob([data], { type: 'application/octet-stream' });
+
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+
+                this.setState({
+                    newCertFileName: "",
+                    addNewCertFileDialogOpen: false
+                });
+            } else {
+                const errText = await response.text();
+                window.alert('Get certification file failed: ' + errText);
+            }
+        } catch (err) {
+            window.alert('Get new certification file error: ' + err.message);
+        }
+    }
+
     handleUpdateFile = async () => {
         try {
-            const { fileName, fileContent, fileContentType, selectedFile, fileEditMode } = this.state;
+            const { fileName, fileContent, fileContentType, selectedFile, fileEditMode, currentFileInfo } = this.state;
             if (!fileName) {
                 window.alert('File Name is empty');
                 return;
@@ -1284,7 +1445,7 @@ class Home extends Component {
             }
             const formData = new FormData();
             formData.append('file', file, file.name || fileName);
-            const resp = await fetch(`${this.state.host}:${this.state.port}/update_api_file`, {
+            const resp = await fetch(`${this.state.host}:${this.state.port}/update_api_file?client_ip=${currentFileInfo["client_ip"]}`, {
                 method: 'POST',
                 body: formData
             });
@@ -1308,7 +1469,9 @@ class Home extends Component {
     }
 
     setFilterApis(value) {
-        this.setState({ filterApis: value }, () => {
+        const updatedSelected = this.state.selected.filter(item => value.includes(item));
+        
+        this.setState({ filterApis: value, selected: updatedSelected }, () => {
             localStorage.setItem('filterApis', JSON.stringify(this.state.filterApis));
         });
     }
@@ -1483,10 +1646,11 @@ class Home extends Component {
             if (response.ok) {
                 this.setState(prevState => {
                     const newApis = { ...prevState.apis };
-                    if (newApis[newApiClientIp][newApiUrl] === null) newApis[newApiClientIp][newApiUrl] = {};
-                    if (newApis[newApiClientIp][newApiUrl][newApiMethod] === null) newApis[newApiClientIp][newApiUrl][newApiMethod] = {};
-                    if (newApis[newApiClientIp][newApiUrl][newApiMethod][newApiParms] === null) newApis[newApiClientIp][newApiUrl][newApiMethod][newApiParms] = {};
-                    if (newApis[newApiClientIp][newApiUrl][newApiMethod][newApiParms][newApiBody] === null) newApis[newApiClientIp][newApiUrl][newApiMethod][newApiParms][newApiBody] = {};
+                    if (newApis[newApiClientIp] == null) newApis[newApiClientIp] = {};
+                    if (newApis[newApiClientIp][newApiUrl] == null) newApis[newApiClientIp][newApiUrl] = {};
+                    if (newApis[newApiClientIp][newApiUrl][newApiMethod] == null) newApis[newApiClientIp][newApiUrl][newApiMethod] = {};
+                    if (newApis[newApiClientIp][newApiUrl][newApiMethod][newApiParms] == null) newApis[newApiClientIp][newApiUrl][newApiMethod][newApiParms] = {};
+                    if (newApis[newApiClientIp][newApiUrl][newApiMethod][newApiParms][newApiBody] == null) newApis[newApiClientIp][newApiUrl][newApiMethod][newApiParms][newApiBody] = {};
                     newApis[newApiClientIp][newApiUrl][newApiMethod][newApiParms][newApiBody] = apiConfig;
                     const newFilterApis = Array.isArray(prevState.filterApis) ? [...prevState.filterApis] : [];
                     const api_method_parms_bodys = this.state.api_method_parms_bodys;
