@@ -18,6 +18,7 @@ import CircularProgress from '@material-ui/core/CircularProgress';
 import Backdrop from '@material-ui/core/Backdrop';
 import PropTypes from 'prop-types';
 import DescriptionIcon from '@material-ui/icons/Description';
+import DeleteIcon from '@material-ui/icons/Delete';
 
 import Table from '@material-ui/core/Table';
 import TableBody from '@material-ui/core/TableBody';
@@ -296,6 +297,7 @@ class Home extends Component {
             addStaticApiDialogOpen: false,
             selectedStaticFile: null,
             selectedStaticFileName: '',
+            selectedStaticFileLink: '',
             addApiDialogOpen: false,
             newApiClientIp: '',
             newApiUrl: '',
@@ -538,7 +540,7 @@ class Home extends Component {
                                 value={this.state.filterApis}
                                 style={{ margin: 10, width: 700 }}
                                 getOptionSelected={(option, value) =>
-                                    option[0] === value[0] && option[1] === value[1] && option[2] === value[2] && option[3] === value[3]
+                                    option[0] === value[0] && option[1] === value[1] && option[2] === value[2] && option[3] === value[3] && option[4] === value[4]
                                 }
                             />
                             {this.state.selected.length > 0 && (
@@ -942,7 +944,7 @@ class Home extends Component {
                                         const response = await fetch(`${this.state.host}:${this.state.port}/update_api_config`, {
                                             method: 'DELETE',
                                             headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ client_ip, path, method, body }),
+                                            body: JSON.stringify({ client_ip, path, method, parms, body }),
                                         });
                                         if (!response.ok) {
                                             const errText = await response.text();
@@ -1181,6 +1183,7 @@ class Home extends Component {
                                                 <TableCell style={{ width: "40px", maxWidth: "40px", minWidth: "40px" }} >ID</TableCell>
                                                 <TableCell align="left">File Name</TableCell>
                                                 <TableCell align="left">File Path</TableCell>
+                                                <TableCell align="left">Action</TableCell>
                                             </TableRow>
                                         </TableHead>
                                         <TableBody>
@@ -1197,6 +1200,11 @@ class Home extends Component {
                                                 <Tooltip title={row.fileLink}>
                                                     <TableCell align="left" className="fileListCell" >{row.fileLink}</TableCell>
                                                 </Tooltip>
+                                                <TableCell align="left" className="fileListCell" >
+                                                    <IconButton aria-label="delete" onClick={async () => await this.handleStaticFileDelete(row.fileLink)}>
+                                                        <DeleteIcon />
+                                                    </IconButton>
+                                                </TableCell>
                                             </TableRow>
                                         ))}
                                         </TableBody>
@@ -1239,6 +1247,28 @@ class Home extends Component {
                 </Dialog>
             </Fragment>
         )
+    }
+
+    async handleStaticFileDelete(fileLink) {
+        try {
+            const response = await fetch(`${this.state.host}:${this.state.port}/update_api_assets_file?fileLink=${fileLink}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            if (response.ok) {
+                var staticFileList = this.state.staticFileList;
+                staticFileList = staticFileList.filter(obj => obj.fileLink !== fileLink);
+                this.setState({
+                    staticFileList: staticFileList
+                });
+                window.alert('Delete static file list success.');
+            } else {
+                const errText = await response.text();
+                window.alert('Delete static file list failed: ' + errText);
+            }
+        } catch (err) {
+            window.alert('Delete static file list error: ' + err.message);
+        }
     }
 
     updateProgress(targetProgress) {
@@ -1300,7 +1330,7 @@ class Home extends Component {
             }
 
             const name = payload && payload.origin ? payload.origin : '';
-            let contentText = JSON.stringify(payload || {}, null, 2);
+            let contentText = "";
             if (name) {
                 try {
                     const rawApi = api || '';
@@ -1308,8 +1338,13 @@ class Home extends Component {
                     const contentType = (payload && payload.content_type) ? payload.content_type : 'application/json';
                     var fileResp = '';
                     if (parms) {
-                        fileUrl = fileUrl + "?" + parms
+                        fileUrl = fileUrl + "?" + parms;
+                        fileUrl = fileUrl + "&" + `search_client_ip=${client_ip}`;
                     }
+                    else {
+                        fileUrl = fileUrl + "?" + `search_client_ip=${client_ip}`;
+                    }
+                    
                     if (method === "GET") {
                         fileResp = await fetch(fileUrl, { method: method, headers: { 'Content-Type': contentType } });    
                     }
@@ -1354,6 +1389,15 @@ class Home extends Component {
 
             if (this.state.staticFileList.some(subArray => subArray.fileName === selectedStaticFileName)) {
                 window.alert('File Name already exists, please rename name.');
+
+                const existingIndex = this.state.staticFileList.findIndex(subArray => subArray.fileName === selectedStaticFileName);
+                if (existingIndex !== -1) {
+                    const updatedList = [...this.state.staticFileList];
+                    const [item] = updatedList.splice(existingIndex, 1);
+                    updatedList.unshift(item);
+                    this.setState({ staticFileList: updatedList });
+                    return;
+                }
                 return;
             }
 
@@ -1657,6 +1701,9 @@ class Home extends Component {
                     const newApiMethodItem = api_method_parms_bodys.find(
                         item => item[0] === newApiClientIp && item[1] === newApiUrl && item[2] === newApiMethod && item[3] === newApiParms && item[4] === newApiBody
                     );
+                    if (!newApiMethodItem) {
+                        api_method_parms_bodys.push([newApiClientIp, newApiUrl, newApiMethod, newApiParms, newApiBody]);
+                    }
                     if (newApiMethodItem && !newFilterApis.some(item => item[0] === newApiClientIp && item[1] === newApiUrl && item[2] === newApiMethod && item[3] === newApiParms && item[4] === newApiBody)) {
                         newFilterApis.push(newApiMethodItem);
                     }
@@ -1664,6 +1711,7 @@ class Home extends Component {
                     return {
                         apis: newApis,
                         filterApis: newFilterApis,
+                        api_method_parms_bodys: api_method_parms_bodys,
                         addApiDialogOpen: false,
                         newApiClientIp: '',
                         newApiUrl: '',
