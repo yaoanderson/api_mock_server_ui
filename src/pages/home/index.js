@@ -1,7 +1,11 @@
+/**
+ * @description : This file is for home page code logic
+ * @author      : Anderson.Yao
+ */
+
 import { Fragment, Component } from 'react'
 import { Redirect } from 'react-router-dom';
 import { connect } from 'react-redux'
-import axios from 'axios'
 
 import TextField from '@material-ui/core/TextField';
 import Autocomplete from '@material-ui/lab/Autocomplete';
@@ -419,6 +423,15 @@ class Home extends Component {
                 username: _username 
             });
         }
+        else {
+            const userStorage = localStorage.getItem('user');
+            const user = JSON.parse(userStorage);
+            const _username = user.username;
+            this.setState({ 
+                token: "",
+                username: _username
+            });
+        }
 
         if (_username || this.props.isLogin) {
             this.updateProgress(100);
@@ -428,6 +441,13 @@ class Home extends Component {
 
     createData(id, fileName, fileLink) {
         return { id, fileName, fileLink };
+    }
+
+    capitalizeName (name) {
+        return name
+            .split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
     }
 
     render() {
@@ -459,14 +479,16 @@ class Home extends Component {
                 {this.state.redirect && <Redirect to="/login" /> }
                 <div className="mock-solution-home">
                     <AppBar position="static" style={{width: "100%", margin: '0 auto'}}>
-                        {this.state.username && <Typography style = {{ width: "auto", position: 'absolute', lineHeight: "48px", height: 48, left: 35, color: "rgba(0, 0, 0, 0.87)", fontFamily: "emoji" }} >Hello <b>{this.state.username}</b></Typography>}
+                        {this.state.username && <Typography style = {{ width: "auto", position: 'absolute', lineHeight: "48px", height: 48, left: 35, color: "rgba(0, 0, 0, 0.87)", fontFamily: "emoji" }} >Hello <b>{this.capitalizeName(this.state.username)}</b></Typography>}
                         <Paper className="tabs">
                             <Tabs value={this.state.tab} onChange={(event, value) => this.setState({tab: value})} indicatorColor="primary" textColor="primary" centered >
                                 <Tab label="API" {...a11yProps(0)} />
                                 <Tab label="Others" {...a11yProps(1)} disabled={true} />
                             </Tabs>
                         </Paper>
-                        {!this.state.username && <Button color = "default" id = "logout-button" style = {{ width: 100, position: 'absolute', height: 48, right: 10 }}
+                        <Button color = "default" id = "guide-button" style = {{ width: 150, position: 'absolute', height: 48, right: 100, color: "blue" }}
+                                    onClick = {() =>  window.open("https://confluence.com", "_blank")} > User Guide </Button>
+                        {this.state.username && <Button color = "default" id = "logout-button" style = {{ width: 100, position: 'absolute', height: 48, right: 10 }}
                                     onClick = {() => this.logout()} > Logout </Button>}
                     </AppBar>
                     <TabPanel value={this.state.tab} index={0} style={{width: 1200, margin: '0 auto'}} >
@@ -688,7 +710,9 @@ class Home extends Component {
                                         >
                                             {client_ip}
                                         </TableCell>
-                                        <TableCell align="center">{api}</TableCell>
+                                        <Tooltip title={api}>
+                                            <TableCell align="left" className='apiListCellMore' >{api}</TableCell>
+                                        </Tooltip>
                                         <TableCell align="center">{method}</TableCell>
                                         <Tooltip title={parms}>
                                             <TableCell align="left" className='apiListCell' >{parms}</TableCell>
@@ -708,6 +732,7 @@ class Home extends Component {
                                                             method: 'PUT',
                                                             headers: { 'Content-Type': 'application/json' },
                                                             body: JSON.stringify({
+                                                                username: "platform_" + self.state.username,
                                                                 client_ip: client_ip,
                                                                 path: api,
                                                                 method: method,
@@ -781,8 +806,8 @@ class Home extends Component {
                             updateProgress={value => this.updateProgress(value)}
                             domain={this.props.domain}
                             token={this.state.token}
+                            username={this.state.username}
                             refresh_token={this.state.refresh_token}
-                            refreshToken={callback => this.refreshToken(callback)}
                             filterApis={this.state.filterApis}
                             apis={this.state.apis}
                             host={this.state.host}
@@ -944,7 +969,7 @@ class Home extends Component {
                                         const response = await fetch(`${this.state.host}:${this.state.port}/update_api_config`, {
                                             method: 'DELETE',
                                             headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ client_ip, path, method, parms, body }),
+                                            body: JSON.stringify({ username: "platform_" + this.state.username.toLowerCase(), client_ip, path, method, parms, body }),
                                         });
                                         if (!response.ok) {
                                             const errText = await response.text();
@@ -1251,7 +1276,7 @@ class Home extends Component {
 
     async handleStaticFileDelete(fileLink) {
         try {
-            const response = await fetch(`${this.state.host}:${this.state.port}/update_api_assets_file?fileLink=${fileLink}`, {
+            const response = await fetch(`${this.state.host}:${this.state.port}/update_api_assets_file?fileLink=${fileLink}&username=platform_${this.state.username}`, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' }
             });
@@ -1345,10 +1370,10 @@ class Home extends Component {
                         fileUrl = fileUrl + "?" + `search_client_ip=${client_ip}`;
                     }
                     
-                    if (method === "GET") {
+                    if (method === "GET" || method === "DELETE") {
                         fileResp = await fetch(fileUrl, { method: method, headers: { 'Content-Type': contentType } });    
                     }
-                    else if (method === "POST") {
+                    else if (method === "POST" || method === "PUT") {
                         fileResp = await fetch(fileUrl, { method: method, headers: { 'Content-Type': contentType }, body: body });    
                     }
                     
@@ -1403,9 +1428,10 @@ class Home extends Component {
 
             let file = selectedStaticFile;
             
+            const username = "platform_" + this.state.username.toLowerCase();
             const formData = new FormData();
             formData.append('file', file, selectedStaticFileName || file.name);
-            const resp = await fetch(`${this.state.host}:${this.state.port}/update_api_assets_file`, {
+            const resp = await fetch(`${this.state.host}:${this.state.port}/update_api_assets_file?username=${username}`, {
                 method: 'POST',
                 body: formData
             });
@@ -1423,16 +1449,17 @@ class Home extends Component {
 
     handleAddNewCertFile = async () => {
         const domain = this.state.newCertFileName;
-        if (domain === "") {
+        const username = "platform_" + this.state.username.toLowerCase();
+        if (domain === "" || username === "") {
             return;
         }
 
         try {
-            const response = await fetch(`${this.state.host}:${this.state.port}/update_api_file?domain=${domain}`, {
+            const response = await fetch(`${this.state.host}:${this.state.port}/update_api_file?domain=${domain}&username=${username}`, {
                 method: 'GET',
                 headers: { 'Content-Type': 'application/json' }
             });
-            if (response.ok) {
+            if (response.ok) {                
                 var data = await response.text();
 
                 const contentDisposition = response.headers.get('Content-Disposition');
@@ -1460,6 +1487,8 @@ class Home extends Component {
                     newCertFileName: "",
                     addNewCertFileDialogOpen: false
                 });
+
+                alert("Please contact with Admin (Anderson Yao) to get approve for enabling certification in Mock Server.");
             } else {
                 const errText = await response.text();
                 window.alert('Get certification file failed: ' + errText);
@@ -1487,9 +1516,10 @@ class Home extends Component {
                 const blob = new Blob([fileContent ?? ''], { type: fileContentType || 'text/plain' });
                 file = new File([blob], fileName, { type: fileContentType || 'text/plain' });
             }
+            const username = "platform_" + this.state.username.toLowerCase();
             const formData = new FormData();
             formData.append('file', file, file.name || fileName);
-            const resp = await fetch(`${this.state.host}:${this.state.port}/update_api_file?client_ip=${currentFileInfo["client_ip"]}`, {
+            const resp = await fetch(`${this.state.host}:${this.state.port}/update_api_file?client_ip=${currentFileInfo["client_ip"]}&username=${username}`, {
                 method: 'POST',
                 body: formData
             });
@@ -1535,29 +1565,6 @@ class Home extends Component {
         return enabled;
     }
 
-    async refreshToken (callback) {
-        const self = this;
-        await axios.post(`https://${self.props.domain}.com:443/rbac-api/v1/authentication`, {
-            "client_id": "rbac-service",
-            "grant_type": "refresh_token",
-            "refresh_token": self.state.refresh_token
-        })
-        .then(function (response) {
-            self.setState({
-                token: response.data.access_token,
-                refresh_token: response.data.refresh_token
-            }, () => {
-                if (callback) {
-                    callback();
-                }
-            })
-        })
-        .catch(function (error) {
-            console.error(error);
-            self.setState({redirect: true});
-        })
-    }
-
     async callGetApis()  {
         const self = this;
         self.setState({ apisLoading: true });
@@ -1598,48 +1605,6 @@ class Home extends Component {
                 self.setState({ apis: {}, apisLoading: false, error: err.message });
             }
         }
-        else {
-            jsonData = {
-                "1.0.0.127": {
-                    "/xxx/yyy/v2/download": {
-                        "GET": {
-                            "deviceId=zzzz": {
-                                "default": {
-                                    "parms": "deviceId=zzzz",
-                                    "body": "default",
-                                    "origin": "download.json",
-                                    "content_type": "application/json",
-                                    "speed": 20,
-                                    "enabled": 1,
-                                    "code": 404
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            let api_method_parms_bodys = []
-            Object.entries(jsonData).forEach(([client_ip, cvalue]) => {
-                Object.entries(cvalue).forEach(([api, avalue]) => {
-                    Object.entries(avalue).forEach(([method, mvalue]) => {
-                        Object.entries(mvalue).forEach(([parms, pvalue]) => {
-                            if (parms !== "api_mock_solution_filter_out_rule"){
-                                Object.keys(pvalue).forEach(body => {
-                                    if (body !== "api_mock_solution_body_filter_out_rule"){
-                                        api_method_parms_bodys.push([client_ip, api, method, parms, body])
-                                    }
-                                });
-                            }
-                        });
-                    });
-                });
-            });
-            self.setState({
-                apis: jsonData,
-                api_method_parms_bodys: api_method_parms_bodys,
-                apisLoading: false
-            });
-        }
     }
 
     handleApiConfigSave = (client_ip, api, method, parms, body, config) => {
@@ -1675,6 +1640,7 @@ class Home extends Component {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    username: "platform_" + this.state.username.toLowerCase(),
                     client_ip: newApiClientIp,
                     path: newApiUrl,
                     method: newApiMethod,

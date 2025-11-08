@@ -181,6 +181,8 @@ class ApiConfigDialog extends Component {
                                             <option value="image/png">image/png</option>
                                             <option value="image/jpeg">image/jpeg</option>
                                             <option value="image/gif">image/gif</option>
+                                            <option value="text/javascript">text/javascript</option>
+                                            <option value="binary/octet-stream">binary/octet-stream</option>
                                         </TextField>
                                     </Grid>
                                     {/* Transfer Rate */}
@@ -374,6 +376,7 @@ class ApiConfigDialog extends Component {
         try {
             const { client_ip, path, method, parms, body, origin, content_type, enabled, speed, code } = this.state.selectedApi;
             const request_body = JSON.stringify({
+                username: "platform_" + this.props.username.toLowerCase(),
                 client_ip,
                 path,
                 method,
